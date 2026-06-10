@@ -1,0 +1,45 @@
+version: "3.9"
+
+services:
+  laptop-agent:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.agent
+    container_name: laptop-agent
+    restart: unless-stopped
+    network_mode: host          # Akses localhost hanya
+    environment:
+      - AGENT_HOST=localhost
+      - AGENT_PORT=8765
+    env_file:
+      - ../.env
+    volumes:
+      - ../logs:/app/logs       # Persist logs
+      - ~/.ssh:/root/.ssh:ro    # SSH keys (read-only)
+      - ~/safe_scripts:/home/user/safe_scripts:ro
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL                     # Hapus semua Linux capabilities
+    cap_add:
+      - DAC_OVERRIDE            # Hanya yang diperlukan
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100m
+
+  telegram-bot:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.bot
+    container_name: telegram-bot
+    restart: unless-stopped
+    depends_on:
+      - laptop-agent
+    env_file:
+      - ../.env
+    volumes:
+      - ../logs:/app/logs
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL

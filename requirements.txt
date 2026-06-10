@@ -1,0 +1,29 @@
+# Bot & Framework
+python-telegram-bot==21.5
+fastapi==0.111.0
+uvicorn[standard]==0.30.1
+httpx==0.27.0
+pydantic
+websockets==12.0
+
+# Autentikasi
+pyotp==2.9.0
+python-jose[cryptography]==3.3.0
+passlib==1.7.4
+
+# Keamanan & Kriptografi
+cryptography==42.0.8
+python-dotenv==1.0.1
+
+# Agent tools
+Pillow
+mss==9.0.2                 # Screenshot cross-platform
+psutil==5.9.8              # System monitoring
+paramiko==3.4.0            # SSH/SFTP
+PyYAML==6.0.1
+
+# Logging
+loguru==0.7.2
+
+# Rate limiting
+slowapi==0.1.9

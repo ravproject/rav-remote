@@ -1,0 +1,150 @@
+# Remote Laptop Control
+
+This project allows you to control a laptop remotely using a mobile messaging app like Telegram or WhatsApp.
+
+## Features
+
+- **Remote Command Execution:** Execute a predefined set of safe commands on your laptop from anywhere.
+- **AI-Powered Commands:** Use natural language to execute commands (e.g., "take a screenshot").
+- **Secure:** The system uses a multi-layered security approach, including OTP authentication, JWTs, and command sanitization.
+- **Extensible:** The project is designed to be extensible, allowing you to add new commands and features easily.
+- **Dockerized:** The project is fully dockerized, making it easy to deploy and run.
+
+## Getting Started
+
+### Prerequisites
+
+- Python 3.11+
+- Node.js 20+
+- Docker
+- A Telegram Bot Token and User ID
+- A WhatsApp account (optional)
+- An NVIDIA NIM API Key (optional)
+
+### Installation
+
+1.  **Clone the repository:**
+
+    ```bash
+    git clone https://github.com/your-username/remote-laptop-control.git
+    cd remote-laptop-control
+    ```
+
+2.  **Create a Python virtual environment:**
+
+    ```bash
+    python3 -m venv venv
+    source venv/bin/activate
+    ```
+
+3.  **Install the Python dependencies:**
+
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+4.  **Install the Node.js dependencies (for WhatsApp):**
+
+    ```bash
+    npm install
+    ```
+
+5.  **Configure the environment variables:**
+
+    Copy the `.env.example` file to `.env` and fill in the required values.
+
+    ```bash
+    cp config/.env.example .env
+    ```
+
+    See the [Configuration](#configuration) section for more details.
+
+### Running the Application
+
+You can run the application using Docker (recommended) or directly on your machine.
+
+#### Docker (Recommended)
+
+1.  **Build the Docker images:**
+
+    ```bash
+    docker-compose -f docker/docker-compose.yml build
+    ```
+
+2.  **Run the application:**
+
+    ```bash
+    docker-compose -f docker/docker-compose.yml up -d
+    ```
+
+#### Local Machine
+
+1.  **Run the agent:**
+
+    ```bash
+    source venv/bin/activate
+    python -m agent.main
+    ```
+
+2.  **Run the Telegram bot:**
+
+    ```bash
+    source venv/bin/activate
+    python -m bot.telegram_bot
+    ```
+
+3.  **Run the WhatsApp bot (optional):**
+
+    ```bash
+    node bot/whatsapp_bot.js
+    ```
+
+## Configuration
+
+The application is configured using environment variables. See the `.env.example` file for a list of all available options.
+
+### Security
+
+-   **OTP Secret:** Generate a new OTP secret and add it to your `.env` file. You will also need to add this secret to your authenticator app.
+-   **JWT Secret:** Generate a new JWT secret and add it to your `.env` file.
+-   **Allowed User IDs:** Add your Telegram and/or WhatsApp user IDs to the `ALLOWED_USER_IDS` environment variable.
+-   **Agent API Key:** Generate a new API key for the agent and add it to your `.env` file.
+
+### NVIDIA NIM
+
+To use the AI-powered commands, you will need to sign up for an NVIDIA NIM account and generate an API key. Add the API key to your `.env` file.
+
+## Usage
+
+Once the application is running, you can send commands to your laptop from your mobile device.
+
+### Telegram
+
+1.  Start a chat with your Telegram bot.
+2.  Send the `/start` command to authenticate.
+3.  Enter the OTP from your authenticator app.
+4.  You can now send commands to your laptop.
+
+### WhatsApp
+
+1.  Send a message to your WhatsApp number.
+2.  You will be prompted to authenticate with an OTP.
+3.  Enter the OTP from your authenticator app.
+4.  You can now send commands to your laptop.
+
+### Commands
+
+See the `allowed_commands.yaml` file for a list of all available commands.
+
+## Security Considerations
+
+This application gives you full control over your laptop. It is important to understand the security implications before using it.
+
+-   **Do not share your API keys or tokens with anyone.**
+-   **Only use this application on devices and networks that you own and trust.**
+-   **Review the `allowed_commands.yaml` file to ensure that you are comfortable with the commands that can be executed.**
+-   **Keep your system and dependencies up to date.**
+
+## Disclaimer
+
+The developers of this project are not responsible for any damage or loss of data that may occur as a result of using this application. Use at your own risk.

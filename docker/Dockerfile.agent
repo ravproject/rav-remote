@@ -1,0 +1,27 @@
+FROM python:3.11-slim
+
+# Non-root user untuk keamanan
+RUN useradd -m -u 1000 -s /bin/bash agentuser
+
+WORKDIR /app
+
+# Install deps sistem minimal
+RUN apt-get update && apt-get install -y --no-install-recommends 
+    scrot 
+    firejail 
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY --chown=agentuser:agentuser . .
+
+USER agentuser
+
+EXPOSE 8765
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s 
+    CMD curl -f http://localhost:8765/health || exit 1
+
+CMD ["python", "-m", "uvicorn", "agent.main:app", 
+     "--host", "127.0.0.1", "--port", "8765"]

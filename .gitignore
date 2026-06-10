@@ -1,0 +1,19 @@
+# Lingkungan Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.venv/
+
+# Lingkungan Node.js
+node_modules/
+npm-debug.log
+
+# Kredensial dan Rahasia (SANGAT PENTING)
+.env
+
+# Folder Log dan Sesi
+logs/
+sessions/
+wa_session/

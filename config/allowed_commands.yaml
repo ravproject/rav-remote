@@ -1,0 +1,15 @@
+
+safe_commands:
+  screenshot:
+    description: "Ambil screenshot layar"
+    requires_confirmation: false
+    sandbox_required: false
+
+  list_files:
+    description: "List isi direktori (path terbatas)"
+    requires_confirmation: false
+    sandbox_required: false
+    allowed_paths:
+      - "~/Documents"
+      - "~/Downloads"
+      - "~/Desktop"
