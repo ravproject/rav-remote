@@ -1,6 +1,6 @@
 {
   "name": "@ravproject/rav-remote",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Remote Laptop Control via Telegram/WhatsApp",
   "type": "commonjs",
   "bin": {

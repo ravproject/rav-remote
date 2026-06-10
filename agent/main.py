@@ -4,6 +4,9 @@ Jalankan di laptop yang ingin dikontrol
 """
 import os
 import base64
+from dotenv import load_dotenv
+load_dotenv()
+
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.security import APIKeyHeader

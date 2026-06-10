@@ -4,6 +4,9 @@ Menggunakan python-telegram-bot v21 (async)
 """
 import os
 import asyncio
+from dotenv import load_dotenv
+load_dotenv()
+
 from telegram import Update, BotCommand
 from telegram.ext import (
     Application,
