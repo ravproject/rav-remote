@@ -37,12 +37,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     await update.message.reply_text(
-        "🔐 *Autentikasi Diperlukan*
-
-"
-        "Kirim OTP 6-digit dari Google Authenticator:
-"
-        "`/otp <kode_6_digit>`",
+        """🔐 *Autentikasi Diperlukan*\n\nKirim OTP 6-digit dari Google Authenticator:\n`/otp <kode_6_digit>`""",
         parse_mode="Markdown"
     )
 
@@ -65,25 +60,7 @@ async def otp_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         _user_sessions[user_id] = token
 
         await update.message.reply_text(
-            "✅ *Login berhasil!* Sesi aktif 4 jam.
-
-"
-            "Perintah tersedia:
-"
-            "`!screenshot` — Screenshot layar
-"
-            "`!sysinfo` — Info sistem
-"
-            "`!ls <path>` — List file
-"
-            "`!get <file>` — Kirim file
-"
-            "`!lock` — Kunci layar
-"
-            "`!help` — Bantuan
-
-"
-            "🤖 Mode AI: Ketik perintah natural language",
+            """✅ *Login berhasil!* Sesi aktif 4 jam.\n\nPerintah tersedia:\n`!screenshot` — Screenshot layar\n`!sysinfo` — Info sistem\n`!ls <path>` — List file\n`!get <file>` — Kirim file\n`!lock` — Kunci layar\n`!help` — Bantuan\n\n🤖 Mode AI: Ketik perintah natural language""",
             parse_mode="Markdown"
         )
         auditor.log_event(user_id, "LOGIN_SUCCESS", "OTP verified")
@@ -133,11 +110,8 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif isinstance(result, str):
             # Potong jika terlalu panjang
             if len(result) > 4000:
-                result = result[:3900] + "
-...[truncated]"
-            await update.message.reply_text(f"```
-{result}
-```", parse_mode="Markdown")
+                result = result[:3900] + "\n...[truncated]"
+            await update.message.reply_text(f"```\n{result}\n```", parse_mode="Markdown")
 
     except Exception as e:
         logger.error(f"Command error for {user_id}: {e}")
