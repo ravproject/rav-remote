@@ -61,15 +61,30 @@ def get_file(filepath: str) -> dict:
             "mimetype": _guess_mimetype(target.suffix),
         }
 
-def _guess_mimetype(suffix: str) -> str:
-    mimetypes = {
-        ".pdf": "application/pdf",
-        ".txt": "text/plain",
-        ".png": "image/png",
-        ".jpg": "image/jpeg",
-        ".jpeg": "image/jpeg",
-        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        ".log": "text/plain",
-    }
-    return mimetypes.get(suffix.lower(), "application/octet-stream")
+def save_file(filename: str, content: bytes) -> str:
+    """
+    Save an uploaded file to the safe Downloads directory.
+    """
+    try:
+        sanitizer = InputSanitizer()
+        # Sanitize filename
+        safe_name = "".join([c for c in filename if c.isalnum() or c in "._- "]).strip()
+        if not safe_name:
+            return "❌ Nama file tidak valid."
+        
+        save_dir = Path.home() / "Downloads" / "rav-remote"
+        save_dir.mkdir(parents=True, exist_ok=True)
+        
+        target_path = save_dir / safe_name
+        
+        # Security check: Ensure we stay within Downloads/rav-remote
+        if not target_path.resolve().is_relative_to(save_dir.resolve()):
+            return "❌ Path traversal terdeteksi."
+
+        with open(target_path, "wb") as f:
+            f.write(content)
+        
+        return f"✅ File berhasil disimpan di: `{target_path}`"
+    except Exception as e:
+        logger.error(f"Failed to save file: {e}")
+        return f"❌ Gagal menyimpan file: {str(e)}"

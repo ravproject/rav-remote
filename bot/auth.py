@@ -17,21 +17,28 @@ from loguru import logger
 from .rate_limiter import check_rate_limit
 
 
-OTP_SECRET = os.environ["OTP_SECRET_KEY"]
-JWT_SECRET = os.environ["JWT_SECRET_KEY"]
-ALLOWED_USERS = set(
-    os.environ.get("ALLOWED_USER_IDS", "").split(",")
-)
-
 # Token blacklist (untuk logout/revoke)
 _revoked_tokens: set[str] = set()
+
 
 class AuthManager:
 
     @staticmethod
+    def _get_otp_secret():
+        return os.environ.get("OTP_SECRET_KEY", "")
+
+    @staticmethod
+    def _get_jwt_secret():
+        return os.environ.get("JWT_SECRET_KEY", "default_secret")
+
+    @staticmethod
+    def _get_allowed_users():
+        return set(os.environ.get("ALLOWED_USER_IDS", "").split(","))
+
+    @staticmethod
     def is_user_allowed(user_id: str) -> bool:
         """Cek apakah user ID ada di whitelist."""
-        allowed = str(user_id) in ALLOWED_USERS
+        allowed = str(user_id) in AuthManager._get_allowed_users()
         if not allowed:
             logger.warning(f"Unauthorized access attempt from user_id: {user_id}")
         return allowed
@@ -42,7 +49,11 @@ class AuthManager:
         Verifikasi TOTP code (compatible dengan Google Authenticator).
         Window=1 berarti toleransi ±30 detik.
         """
-        totp = pyotp.TOTP(OTP_SECRET)
+        secret = AuthManager._get_otp_secret()
+        if not secret:
+            logger.error("OTP_SECRET_KEY not set")
+            return False
+        totp = pyotp.TOTP(secret)
         valid = totp.verify(otp_input, valid_window=1)
         if not valid:
             logger.warning(f"Invalid OTP attempt: {otp_input[:6]}")
@@ -63,7 +74,7 @@ class AuthManager:
                 f"{user_id}{time.time()}".encode()
             ).hexdigest()[:16],
         }
-        token = jwt.encode(payload, JWT_SECRET, algorithm="HS256")
+        token = jwt.encode(payload, AuthManager._get_jwt_secret(), algorithm="HS256")
         logger.info(f"Session token issued for user: {user_id}")
         return token
 
@@ -76,7 +87,7 @@ class AuthManager:
         if token in _revoked_tokens:
             return None
         try:
-            payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+            payload = jwt.decode(token, AuthManager._get_jwt_secret(), algorithms=["HS256"])
             return payload.get("sub")
         except JWTError as e:
             logger.warning(f"Invalid JWT: {e}")

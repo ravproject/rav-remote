@@ -43,13 +43,16 @@ class TestAuth(unittest.TestCase):
 
     def test_rate_limit(self):
         from bot.auth import AuthManager
-        # Clear the rate limit state before running the test
         from bot import rate_limiter
+        # Clear the rate limit state before running the test
         rate_limiter._user_command_times.clear()
         
-        self.assertTrue(AuthManager.check_rate_limit("123"))
-        self.assertTrue(AuthManager.check_rate_limit("123"))
-        self.assertFalse(AuthManager.check_rate_limit("123"))
+        user_id = "test_user_rate_limit"
+        # First 2 calls should be fine (MAX is 2)
+        self.assertTrue(AuthManager.check_rate_limit(user_id))
+        self.assertTrue(AuthManager.check_rate_limit(user_id))
+        # 3rd call should fail
+        self.assertFalse(AuthManager.check_rate_limit(user_id))
         time.sleep(61)
         self.assertTrue(AuthManager.check_rate_limit("123"))
 

@@ -28,7 +28,24 @@ class CommandRouter:
             if command_name == "screenshot":
                 img_bytes = await self.handler.handle_screenshot()
                 self.auditor.log_event(user_id, "SCREENSHOT", "")
-                return img_bytes
+                return {"type": "photo", "data": img_bytes}
+
+            elif command_name == "video":
+                duration = 5
+                if args and args[0].isdigit():
+                    duration = min(int(args[0]), 15) # Max 15s
+                vid_bytes = await self.handler.handle_video(duration)
+                self.auditor.log_event(user_id, "VIDEO", f"duration={duration}")
+                if vid_bytes:
+                    return {"type": "video", "data": vid_bytes}
+                return "❌ Gagal merekam video."
+
+            elif command_name == "webcam":
+                img_bytes = await self.handler.handle_webcam()
+                self.auditor.log_event(user_id, "WEBCAM", "")
+                if img_bytes:
+                    return {"type": "photo", "data": img_bytes}
+                return "❌ Gagal mengambil foto webcam (kamera digunakan atau tidak ada)."
 
             elif command_name == "sysinfo":
                 info = await self.handler.handle_sysinfo()

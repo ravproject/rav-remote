@@ -90,28 +90,29 @@ class InputSanitizer:
         """
         try:
             # Resolve path absolut tanpa ..
-            resolved = Path(filepath).resolve()
+            target_path = Path(filepath).expanduser().resolve()
             home = Path.home()
-            cwd = Path.cwd()
 
+            # Hanya izinkan direktori spesifik yang aman
             allowed_dirs = [
                 home / "Documents",
                 home / "Downloads",
                 home / "Desktop",
-                cwd,
-                home,  # Izinkan seluruh direktori home pengguna
+                Path(__file__).parent.parent / "logs",
             ]
 
-            # Pastikan path ada di dalam direktori yang diizinkan
+            # Pastikan path ada di dalam salah satu direktori yang diizinkan
+            is_allowed = False
             for allowed in allowed_dirs:
-                try:
-                    resolved.relative_to(allowed)
-                    return str(resolved)
-                except ValueError:
-                    continue
+                if allowed.exists() and target_path.is_relative_to(allowed):
+                    is_allowed = True
+                    break
 
-            logger.warning(f"Path traversal attempt: {filepath} -> {resolved}")
-            return None
+            if not is_allowed:
+                logger.warning(f"Access denied to path: {filepath} -> {target_path}")
+                return None
+
+            return str(target_path)
 
         except Exception as e:
             logger.error(f"Path validation error: {e}")

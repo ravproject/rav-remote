@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Depends, Header
+from fastapi import FastAPI, HTTPException, Depends, Header, UploadFile, File, Form
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 from loguru import logger
@@ -16,6 +16,8 @@ from bot.command_router import CommandRouter
 from security.audit_logger import AuditLogger
 from security.sanitizer import InputSanitizer
 from bot.auth import AuthManager
+from .file_manager import save_file
+from .battery_monitor import battery_monitor
 
 AGENT_API_KEY = os.environ["AGENT_API_KEY"]
 api_key_header = APIKeyHeader(name="X-API-Key")
@@ -25,15 +27,18 @@ auditor = AuditLogger()
 sanitizer = InputSanitizer()
 
 
+from .terminal_manager import terminal_manager
+
 class CommandRequest(BaseModel):
     command: str
     user_id: str
 
-
-class OTPRequest(BaseModel):
+class TerminalWriteRequest(BaseModel):
     user_id: str
-    otp: str
+    data: str
 
+class TerminalRequest(BaseModel):
+    user_id: str
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -41,19 +46,22 @@ async def lifespan(app: FastAPI):
     yield
     logger.info("Laptop Agent shutdown")
 
-
 app = FastAPI(
     title="Remote Laptop Agent",
-    docs_url=None,   # Sembunyikan docs di produksi
+    docs_url=None,
     redoc_url=None,
     lifespan=lifespan,
 )
-
 
 async def verify_api_key(x_api_key: str = Header(...)):
     if x_api_key != AGENT_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid API key")
     return x_api_key
+
+@app.get("/system/alerts")
+async def get_alerts(_=Depends(verify_api_key)):
+    alerts = battery_monitor.get_alerts()
+    return {"alerts": alerts}
 
 
 @app.post("/auth/verify-otp")
@@ -63,6 +71,56 @@ async def verify_otp(request: OTPRequest, _=Depends(verify_api_key)):
         return {"token": token}
     raise HTTPException(status_code=401, detail="Invalid OTP")
 
+
+@app.post("/terminal/start")
+async def terminal_start(request: TerminalRequest, authorization: str = Header(...), _=Depends(verify_api_key)):
+    token = authorization.replace("Bearer ", "")
+    if AuthManager.verify_session_token(token) == request.user_id:
+        if terminal_manager.start_session(request.user_id):
+            return {"status": "success"}
+    raise HTTPException(status_code=401, detail="Unauthorized")
+
+
+@app.post("/terminal/write")
+async def terminal_write(request: TerminalWriteRequest, authorization: str = Header(...), _=Depends(verify_api_key)):
+    token = authorization.replace("Bearer ", "")
+    if AuthManager.verify_session_token(token) == request.user_id:
+        terminal_manager.write_to_session(request.user_id, request.data)
+        return {"status": "success"}
+    raise HTTPException(status_code=401, detail="Unauthorized")
+
+
+@app.get("/terminal/read/{user_id}")
+async def terminal_read(user_id: str, authorization: str = Header(...), _=Depends(verify_api_key)):
+    token = authorization.replace("Bearer ", "")
+    if AuthManager.verify_session_token(token) == user_id:
+        output = terminal_manager.read_from_session(user_id)
+        return {"output": output or ""}
+    raise HTTPException(status_code=401, detail="Unauthorized")
+
+
+@app.post("/terminal/stop")
+async def terminal_stop(request: TerminalRequest, authorization: str = Header(...), _=Depends(verify_api_key)):
+    token = authorization.replace("Bearer ", "")
+    if AuthManager.verify_session_token(token) == request.user_id:
+        terminal_manager.stop_session(request.user_id)
+        return {"status": "success"}
+    raise HTTPException(status_code=401, detail="Unauthorized")
+
+
+@app.post("/file/upload")
+async def upload_file(
+    file: UploadFile = File(...),
+    user_id: str = Form(...),
+    authorization: str = Header(...),
+    _=Depends(verify_api_key)
+):
+    token = authorization.replace("Bearer ", "")
+    if AuthManager.verify_session_token(token) == user_id:
+        content = await file.read()
+        result = save_file(file.filename, content)
+        return {"status": "success", "message": result}
+    raise HTTPException(status_code=401, detail="Unauthorized")
 
 @app.post("/command")
 async def execute_command(

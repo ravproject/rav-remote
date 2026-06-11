@@ -13,6 +13,8 @@ from agent.screenshot import take_screenshot
 from agent.system_monitor import get_system_info
 from agent.file_manager import list_files, get_file
 from agent.executor import run_script
+from agent.video_recorder import record_video
+from agent.webcam import capture_webcam
 
 
 class CommandHandler:
@@ -24,6 +26,14 @@ class CommandHandler:
     async def handle_screenshot(self) -> bytes:
         """Ambil screenshot dan return sebagai bytes PNG."""
         return take_screenshot()
+
+    async def handle_video(self, duration: int = 5) -> Optional[bytes]:
+        """Rekam layar dan return sebagai bytes MP4."""
+        return record_video(duration)
+
+    async def handle_webcam(self) -> Optional[bytes]:
+        """Ambil foto webcam dan return sebagai bytes JPG."""
+        return capture_webcam()
 
     async def handle_sysinfo(self) -> str:
         """Ambil informasi sistem."""
