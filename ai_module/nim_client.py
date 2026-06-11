@@ -87,8 +87,8 @@ class NIMClient:
             command = parsed.get("command", "UNKNOWN")
             reason = parsed.get("reason", "")
 
-            if command in ("UNKNOWN", "BLOCKED"):
-                logger.info(f"NIM blocked/unknown: {reason}")
+            if command in ("UNKNOWN", "BLOCKED", "CHAT"):
+                logger.info(f"NIM blocked/unknown/chat: {reason}")
                 return f"__NIM_{command}__:{reason}"
 
             # Validasi command yang dihasilkan AI tetap aman
@@ -147,8 +147,8 @@ class CommandInterpreter:
         if ai_result is not None:
             # AI berhasil translate
             if ai_result.startswith("__NIM_"):
-                # AI memblokir atau tidak mengenali
-                return None, []
+                # AI merespons dengan CHAT, BLOCKED, atau UNKNOWN
+                return None, [ai_result]
             # Parse hasil AI seperti explicit command
             return self.fallback.parse(ai_result)
 

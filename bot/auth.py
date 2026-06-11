@@ -9,7 +9,7 @@ import os
 import time
 import pyotp
 import hashlib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from jose import JWTError, jwt
 from functools import lru_cache
@@ -54,10 +54,11 @@ class AuthManager:
         Generate JWT token setelah OTP berhasil.
         Berlaku 4 jam.
         """
+        now = datetime.now(timezone.utc)
         payload = {
             "sub": str(user_id),
-            "iat": datetime.utcnow(),
-            "exp": datetime.utcnow() + timedelta(hours=4),
+            "iat": now,
+            "exp": now + timedelta(hours=4),
             "jti": hashlib.sha256(
                 f"{user_id}{time.time()}".encode()
             ).hexdigest()[:16],

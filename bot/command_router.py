@@ -18,6 +18,10 @@ class CommandRouter:
         command_name, args = await self.interpreter.interpret(message_text)
 
         if not command_name:
+            if args and args[0].startswith("__NIM_CHAT__:"):
+                return args[0].split(":", 1)[1]
+            elif args and args[0].startswith("__NIM_BLOCKED__:"):
+                return "⚠️ Akses Ditolak: " + args[0].split(":", 1)[1]
             return "❓ Perintah tidak dikenali. Ketik `!help` untuk bantuan."
 
         try:

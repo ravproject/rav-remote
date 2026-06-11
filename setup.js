@@ -47,6 +47,31 @@ async function main() {
         fs.mkdirSync(absoluteTargetDir, { recursive: true });
     }
 
+    let existingEnv = {};
+    const envPath = path.join(absoluteTargetDir, '.env');
+    if (fs.existsSync(envPath)) {
+        const content = fs.readFileSync(envPath, 'utf8');
+        content.split('\n').forEach(line => {
+            const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
+            if (match) {
+                let val = match[2] || '';
+                if (val.startsWith('"') && val.endsWith('"')) val = val.substring(1, val.length - 1);
+                existingEnv[match[1]] = val.trim();
+            }
+        });
+    }
+
+    const questionWithDefault = async (query, defaultVal) => {
+        if (defaultVal && defaultVal.trim() !== '') {
+            const displayVal = defaultVal.length > 25 ? `${defaultVal.substring(0, 5)}...${defaultVal.substring(defaultVal.length - 5)}` : defaultVal;
+            // Clean query to avoid double colon
+            const cleanQuery = query.replace(/:\s*$/, '');
+            const answer = await question(`${cleanQuery} [Default: ${displayVal}]: `);
+            return answer.trim() === '' ? defaultVal : answer;
+        }
+        return await question(query);
+    };
+
     console.log(`\n⏳ Menyiapkan file aplikasi di: ${absoluteTargetDir}...`);
     
     // Lokasi file sumber (di mana setup.js berada dalam paket npm)
@@ -56,7 +81,7 @@ async function main() {
     const itemsToCopy = [
         'agent', 'bot', 'ai_module', 'security', 'config', 'docker', 'tests',
         'requirements.txt', 'package.json', 'README.md', 'BLUEPRINT.md', 
-        'ENV_SETUP_GUIDE.md', 'telegram_credentials.md'
+        'ENV_SETUP_GUIDE.md', 'telegram_credentials.md', 'run.js'
     ];
 
     itemsToCopy.forEach(item => {
@@ -71,14 +96,16 @@ async function main() {
 
     // 1. Tanya kredensial ke user
     console.log("\n--- Konfigurasi Kredensial ---");
-    const botToken = await question("1. Masukkan Telegram Bot Token Anda: ");
-    const userIds = await question("2. Masukkan ID Telegram Anda: ");
-    const enableAiInput = await question("3. Aktifkan mode AI NVIDIA NIM? (y/n): ");
+    const botToken = await questionWithDefault("1. Masukkan Telegram Bot Token Anda: ", existingEnv.TELEGRAM_BOT_TOKEN);
+    const userIds = await questionWithDefault("2. Masukkan ID Telegram Anda: ", existingEnv.ALLOWED_USER_IDS);
+    
+    const defaultAi = existingEnv.AI_MODE_ENABLED === 'true' ? 'y' : (existingEnv.AI_MODE_ENABLED === 'false' ? 'n' : '');
+    const enableAiInput = await questionWithDefault("3. Aktifkan mode AI NVIDIA NIM? (y/n): ", defaultAi);
     const enableAi = enableAiInput.toLowerCase() === 'y';
     
-    let nimApiKey = "";
+    let nimApiKey = existingEnv.NVIDIA_NIM_API_KEY || "";
     if (enableAi) {
-        nimApiKey = await question("   Masukkan NVIDIA NIM API Key Anda: ");
+        nimApiKey = await questionWithDefault("   Masukkan NVIDIA NIM API Key Anda: ", nimApiKey);
     }
 
     console.log("\n⏳ Menghasilkan kunci rahasia otomatis...");
@@ -90,10 +117,22 @@ async function main() {
         return result;
     };
 
-    const otpSecret = generateBase32();
-    const jwtSecret = crypto.randomBytes(32).toString('hex');
-    const agentApiKey = crypto.randomBytes(32).toString('base64url');
-    const encryptionKey = crypto.randomBytes(32).toString('base64url');
+    const otpSecret = existingEnv.OTP_SECRET_KEY || generateBase32();
+    const isNewOtp = !existingEnv.OTP_SECRET_KEY;
+
+    if (isNewOtp) {
+        console.log("\n--- Keamanan OTP ---");
+        console.log(`Kunci OTP Anda: \x1b[32m${otpSecret}\x1b[0m`);
+        console.log("Silakan masukkan kunci di atas ke aplikasi Google Authenticator Anda di HP Anda.");
+        await question("Tekan Enter jika Anda sudah selesai menyimpannya...");
+    } else {
+        console.log("\n--- Keamanan OTP ---");
+        console.log(`Menggunakan kunci OTP yang sudah ada di .env`);
+    }
+
+    const jwtSecret = existingEnv.JWT_SECRET_KEY || crypto.randomBytes(32).toString('hex');
+    const agentApiKey = existingEnv.AGENT_API_KEY || crypto.randomBytes(32).toString('base64url');
+    const encryptionKey = existingEnv.ENCRYPTION_KEY || crypto.randomBytes(32).toString('base64url');
 
     const envContent = `TELEGRAM_BOT_TOKEN=${botToken}
 WHATSAPP_SESSION_PATH=./sessions/wa_session
@@ -131,11 +170,9 @@ LOG_FILE=./logs/audit.log
     console.log("🎉 rav-remote BERHASIL DIINSTAL! 🎉");
     console.log("===========================================\n");
     console.log(`Lokasi Instalasi: ${absoluteTargetDir}`);
-    console.log(`Kunci OTP Anda  : \x1b[32m${otpSecret}\x1b[0m (Masukkan ke Google Authenticator)`);
     console.log("\nCara menjalankan:");
     console.log(` 1. cd ${targetFolder === '.' ? 'folder_ini' : targetFolder}`);
-    console.log(" 2. Terminal 1: source venv/bin/activate && python -m agent.main");
-    console.log(" 3. Terminal 2: source venv/bin/activate && python -m bot.telegram_bot\n");
+    console.log(" 2. Jalankan: npm start\n");
     
     rl.close();
 }

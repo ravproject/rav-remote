@@ -30,34 +30,24 @@ This project allows you to control a laptop remotely using a mobile messaging ap
     cd remote-laptop-control
     ```
 
-2.  **Create a Python virtual environment:**
-
-    ```bash
-    python3 -m venv venv
-    source venv/bin/activate
-    ```
-
-3.  **Install the Python dependencies:**
-
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-4.  **Install the Node.js dependencies (for WhatsApp):**
+2.  **Install Node.js dependencies:**
 
     ```bash
     npm install
     ```
 
-5.  **Configure the environment variables:**
-
-    Copy the `.env.example` file to `.env` and fill in the required values.
+3.  **Run the automated setup:**
 
     ```bash
-    cp config/.env.example .env
+    npm run setup
     ```
 
-    See the [Configuration](#configuration) section for more details.
+    This command will automatically:
+    - Create a Python virtual environment (`venv`).
+    - Install all Python dependencies.
+    - Generate secure secrets (OTP, JWT, API Keys).
+    - Guide you through configuring your Telegram Bot Token and User ID.
+    - Create your `.env` configuration file.
 
 ### Running the Application
 
@@ -79,25 +69,23 @@ You can run the application using Docker (recommended) or directly on your machi
 
 #### Local Machine
 
-1.  **Run the agent:**
+Simply run one command to start the entire application (Agent and Telegram Bot):
 
-    ```bash
-    source venv/bin/activate
-    python -m agent.main
-    ```
+```bash
+npm start
+```
 
-2.  **Run the Telegram bot:**
+Alternatively, you can run:
+```bash
+node run.js
+```
 
-    ```bash
-    source venv/bin/activate
-    python -m bot.telegram_bot
-    ```
-
-3.  **Run the WhatsApp bot (optional):**
-
-    ```bash
-    node bot/whatsapp_bot.js
-    ```
+To also run the WhatsApp bot (optional), run:
+```bash
+npm run whatsapp
+# or
+node run.js --whatsapp
+```
 
 ## Configuration
 

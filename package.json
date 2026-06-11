@@ -4,7 +4,7 @@
   "description": "Remote Laptop Control via Telegram/WhatsApp",
   "type": "commonjs",
   "bin": {
-    "rav-remote": "setup.js"
+    "rav-remote": "run.js"
   },
   "repository": {
     "type": "git",
@@ -14,15 +14,20 @@
     "registry": "https://npm.pkg.github.com"
   },
   "scripts": {
-    "start": "node bot/whatsapp_bot.js",
-    "dev": "nodemon bot/whatsapp_bot.js"
+    "start": "node run.js",
+    "setup": "node setup.js",
+    "whatsapp": "node run.js --whatsapp",
+    "dev": "nodemon -e js,json,py,yaml,env run.js"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "^6.7.0",
     "@hapi/boom": "^10.0.1",
+    "@whiskeysockets/baileys": "^6.7.0",
     "axios": "^1.7.2",
     "dotenv": "^16.4.5",
     "pino": "^9.2.0",
     "qrcode-terminal": "^0.12.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
   }
 }

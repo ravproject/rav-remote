@@ -373,7 +373,7 @@ import os
 import time
 import pyotp
 import hashlib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from jose import JWTError, jwt
 from functools import lru_cache
@@ -424,8 +424,8 @@ class AuthManager:
         """
         payload = {
             "sub": str(user_id),
-            "iat": datetime.utcnow(),
-            "exp": datetime.utcnow() + timedelta(hours=4),
+            "iat": datetime.now(timezone.utc),
+            "exp": datetime.now(timezone.utc) + timedelta(hours=4),
             "jti": hashlib.sha256(
                 f"{user_id}{time.time()}".encode()
             ).hexdigest()[:16],

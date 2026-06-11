@@ -4,6 +4,10 @@ Menggunakan python-telegram-bot v21 (async)
 """
 import os
 import asyncio
+import warnings
+# Suppress python-telegram-bot shutdown warning (asyncio loop cancellation quirk on Python 3.12+)
+warnings.filterwarnings("ignore", category=RuntimeWarning, message="coroutine 'Updater.stop' was never awaited")
+
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -24,8 +28,36 @@ BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 router = CommandRouter()
 auditor = AuditLogger()
 
+import json
+
+SESSIONS_FILE = os.path.join(os.path.dirname(__file__), "..", "sessions", "tg_sessions.json")
+
+def load_initial_sessions() -> dict[str, str]:
+    if not os.path.exists(SESSIONS_FILE):
+        return {}
+    try:
+        with open(SESSIONS_FILE, "r") as f:
+            data = json.load(f)
+        # Hanya muat sesi yang masih valid masa berlakunya
+        valid = {}
+        for uid, token in data.items():
+            if AuthManager.verify_session_token(token):
+                valid[uid] = token
+        return valid
+    except Exception as e:
+        logger.error(f"Failed to load sessions: {e}")
+        return {}
+
+def save_current_sessions():
+    try:
+        os.makedirs(os.path.dirname(SESSIONS_FILE), exist_ok=True)
+        with open(SESSIONS_FILE, "w") as f:
+            json.dump(_user_sessions, f)
+    except Exception as e:
+        logger.error(f"Failed to save sessions: {e}")
+
 # State sesi per user: {user_id: jwt_token}
-_user_sessions: dict[str, str] = {}
+_user_sessions: dict[str, str] = load_initial_sessions()
 
 
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -37,6 +69,22 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "❌ Akses ditolak. User ID Anda tidak ada di whitelist."
         )
         auditor.log_event(user_id, "UNAUTHORIZED_START", "")
+        return
+
+    # Cek apakah sudah ada sesi aktif yang valid
+    token = _user_sessions.get(user_id)
+    if token and AuthManager.verify_session_token(token):
+        await update.message.reply_text(
+            "✅ *Sesi Anda sudah aktif!*\n\nTidak perlu login/OTP ulang. Anda bisa langsung menggunakan perintah:\n\n"
+            "`!screenshot` — Screenshot layar\n"
+            "`!sysinfo` — Info sistem\n"
+            "`!ls <path>` — List file\n"
+            "`!get <file>` — Kirim file\n"
+            "`!lock` — Kunci layar\n"
+            "`!help` — Bantuan\n\n"
+            "🤖 Atau ketik pesan biasa (contoh: 'ambil screenshot')",
+            parse_mode="Markdown"
+        )
         return
 
     await update.message.reply_text(
@@ -61,6 +109,7 @@ async def otp_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if AuthManager.verify_otp(otp_code):
         token = AuthManager.generate_session_token(user_id)
         _user_sessions[user_id] = token
+        save_current_sessions()
 
         await update.message.reply_text(
             """✅ *Login berhasil!* Sesi aktif 4 jam.\n\nPerintah tersedia:\n`!screenshot` — Screenshot layar\n`!sysinfo` — Info sistem\n`!ls <path>` — List file\n`!get <file>` — Kirim file\n`!lock` — Kunci layar\n`!help` — Bantuan\n\n🤖 Mode AI: Ketik perintah natural language""",
@@ -88,6 +137,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Verifikasi sesi masih valid
     if not AuthManager.verify_session_token(token):
         del _user_sessions[user_id]
+        save_current_sessions()
         await update.message.reply_text(
             "⏰ Sesi expired. Silakan /start ulang."
         )
@@ -126,6 +176,7 @@ async def logout_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler /logout — revoke sesi."""
     user_id = str(update.effective_user.id)
     token = _user_sessions.pop(user_id, None)
+    save_current_sessions()
     if token:
         AuthManager.revoke_token(token)
     await update.message.reply_text("👋 Logout berhasil. Sesi dihapus.")
@@ -149,6 +200,13 @@ def create_telegram_app() -> Application:
 
 
 if __name__ == "__main__":
+    import asyncio
+    try:
+        asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
     app = create_telegram_app()
     logger.info("Starting Telegram bot (polling mode)...")
     app.run_polling(drop_pending_updates=True)

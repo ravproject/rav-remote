@@ -100,10 +100,14 @@ async def execute_command(
 if __name__ == "__main__":
     import uvicorn
     from pathlib import Path
-    uvicorn.run(
-        app,
-        host="127.0.0.1",  # HANYA localhost — jangan 0.0.0.0
-        port=int(os.environ.get("AGENT_PORT", "8765")),
-        ssl_keyfile=os.environ.get("SSL_KEYFILE"),
-        ssl_certfile=os.environ.get("SSL_CERTFILE"),
-    )
+    try:
+        uvicorn.run(
+            app,
+            host="127.0.0.1",  # HANYA localhost — jangan 0.0.0.0
+            port=int(os.environ.get("AGENT_PORT", "8765")),
+            ssl_keyfile=os.environ.get("SSL_KEYFILE"),
+            ssl_certfile=os.environ.get("SSL_CERTFILE"),
+            loop="asyncio",
+        )
+    except KeyboardInterrupt:
+        logger.info("Laptop Agent stopped by user request.")

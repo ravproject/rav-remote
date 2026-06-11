@@ -92,11 +92,14 @@ class InputSanitizer:
             # Resolve path absolut tanpa ..
             resolved = Path(filepath).resolve()
             home = Path.home()
+            cwd = Path.cwd()
 
             allowed_dirs = [
                 home / "Documents",
                 home / "Downloads",
                 home / "Desktop",
+                cwd,
+                home,  # Izinkan seluruh direktori home pengguna
             ]
 
             # Pastikan path ada di dalam direktori yang diizinkan
