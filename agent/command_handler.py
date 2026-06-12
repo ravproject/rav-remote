@@ -6,6 +6,7 @@ import os
 import subprocess
 import platform
 from pathlib import Path
+from typing import Optional
 from loguru import logger
 from security.sanitizer import InputSanitizer
 from security.sandbox import SandboxExecutor

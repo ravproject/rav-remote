@@ -12,6 +12,8 @@ class FallbackParser:
     COMMAND_MAP = {
         "!screenshot": "screenshot",
         "!ss": "screenshot",
+        "!video": "video",
+        "!webcam": "webcam",
         "!sysinfo": "sysinfo",
         "!info": "sysinfo",
         "!ls": "list_files",

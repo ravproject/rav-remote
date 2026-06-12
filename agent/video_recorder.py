@@ -17,6 +17,12 @@ def record_video(duration: int = 5) -> Optional[bytes]:
     try:
         if "DISPLAY" not in os.environ:
             os.environ["DISPLAY"] = ":0"
+        
+        if "XAUTHORITY" not in os.environ:
+            home = os.path.expanduser("~")
+            xauth = os.path.join(home, ".Xauthority")
+            if os.path.exists(xauth):
+                os.environ["XAUTHORITY"] = xauth
             
         temp_file = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False)
         temp_path = temp_file.name

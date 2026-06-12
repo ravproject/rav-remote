@@ -295,35 +295,58 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # Proses perintah normal
+    # Proses perintah normal melalui HTTP API ke Agent
     await update.message.reply_text("⏳ Memproses...")
 
     try:
-        result = await router.route(message_text, user_id)
-        auditor.log_event(user_id, "COMMAND_EXECUTED", message_text[:100])
+        headers = {
+            "X-API-Key": AGENT_API_KEY,
+            "Authorization": f"Bearer {token}"
+        }
+        
+        async with httpx.AsyncClient() as client:
+            res = await client.post(
+                f"{AGENT_URL}/command",
+                json={"command": message_text, "user_id": user_id},
+                headers=headers,
+                timeout=30
+            )
 
-        # Kirim hasil
-        if isinstance(result, dict):
-            if result.get("type") == "photo":
-                await update.message.reply_photo(result["data"], caption="📸 Berhasil")
-            elif result.get("type") == "video":
-                await update.message.reply_video(result["data"], caption="📹 Live Stream")
-            # For file downloads (!get)
-            elif "filename" in result:
-                 await update.message.reply_document(document=result["data"], filename=result["filename"])
-            elif "error" in result:
-                 await update.message.reply_text(f"❌ {result['error']}")
-        elif isinstance(result, bytes): # Fallback for old screenshot logic if not fully migrated
-            await update.message.reply_photo(result, caption="📸 Screenshot")
-        elif isinstance(result, str):
-            # Potong jika terlalu panjang
-            if len(result) > 4000:
-                result = result[:3900] + "\n...[truncated]"
-            await update.message.reply_text(f"```\n{result}\n```", parse_mode="Markdown")
+        if res.status_code == 200:
+            result = res.json()
+            res_type = result.get("type")
+            content = result.get("content")
+
+            if res_type == "text":
+                # Potong jika terlalu panjang
+                if len(content) > 4000:
+                    content = content[:3900] + "\n...[truncated]"
+                await update.message.reply_text(f"```\n{content}\n```", parse_mode="Markdown")
+            
+            elif res_type == "image":
+                import base64
+                img_bytes = base64.b64decode(content)
+                await update.message.reply_photo(img_bytes, caption="📸 Berhasil")
+            
+            elif res_type == "video":
+                import base64
+                video_bytes = base64.b64decode(content)
+                await update.message.reply_video(video_bytes, caption="📹 Live Stream")
+
+            elif res_type == "document":
+                import base64
+                doc_data = result.get("content", {})
+                file_bytes = base64.b64decode(doc_data["data"])
+                await update.message.reply_document(document=file_bytes, filename=doc_data["filename"])
+
+        elif res.status_code == 400:
+            await update.message.reply_text(f"❌ {res.json().get('detail', 'Input tidak valid')}")
+        else:
+            await update.message.reply_text(f"❌ Agent error: {res.status_code}")
 
     except Exception as e:
         logger.error(f"Command error for {user_id}: {e}")
-        await update.message.reply_text("❌ Terjadi error. Cek log agent.")
+        await update.message.reply_text("❌ Terjadi error saat menghubungi agent.")
         auditor.log_event(user_id, "COMMAND_ERROR", str(e))
 
 
@@ -342,11 +365,15 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     token = _user_sessions.get(user_id)
     if token and AuthManager.verify_session_token(token):
         await update.message.reply_text(
-            "✅ *Sesi Anda sudah aktif!*\n\nTidak perlu login/OTP ulang. Anda bisa langsung menggunakan perintah:\n\n"
+            "✅ *Sesi Anda sudah aktif!*\n\n"
+            "Tidak perlu login/OTP ulang. Anda bisa langsung menggunakan perintah:\n\n"
             "`!screenshot` — Screenshot layar\n"
+            "`!video` — Rekam video layar (5-15s)\n"
+            "`!webcam` — Foto webcam\n"
             "`!sysinfo` — Info sistem\n"
             "`!ls <path>` — List file\n"
             "`!get <file>` — Kirim file\n"
+            "`!term` — Mode Terminal (PTY)\n"
             "`!lock` — Kunci layar\n"
             "`!help` — Bantuan\n\n"
             "🤖 Atau ketik pesan biasa (contoh: 'ambil screenshot')",
@@ -364,6 +391,10 @@ async def otp_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler /otp <code> — verifikasi OTP dan buat sesi."""
     user_id = str(update.effective_user.id)
 
+    if not AuthManager.check_rate_limit(user_id):
+        await update.message.reply_text("⚠️ Terlalu banyak percobaan. Tunggu 1 menit.")
+        return
+
     if not context.args:
         await update.message.reply_text("Gunakan: /otp 123456")
         return
@@ -379,7 +410,18 @@ async def otp_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         save_current_sessions()
 
         await update.message.reply_text(
-            """✅ *Login berhasil!* Sesi aktif 4 jam.\n\nPerintah tersedia:\n`!screenshot` — Screenshot layar\n`!sysinfo` — Info sistem\n`!ls <path>` — List file\n`!get <file>` — Kirim file\n`!lock` — Kunci layar\n`!help` — Bantuan\n\n🤖 Mode AI: Ketik perintah natural language""",
+            "✅ *Login berhasil!* Sesi aktif 4 jam.\n\n"
+            "Perintah tersedia:\n"
+            "`!screenshot` — Screenshot\n"
+            "`!video` — Rekam layar\n"
+            "`!webcam` — Foto webcam\n"
+            "`!sysinfo` — Info sistem\n"
+            "`!ls` — List file\n"
+            "`!get` — Download file\n"
+            "`!term` — Mode Terminal\n"
+            "`!lock` — Kunci layar\n"
+            "`!help` — Bantuan\n\n"
+            "🤖 Mode AI: Ketik pesan biasa",
             parse_mode="Markdown"
         )
         auditor.log_event(user_id, "LOGIN_SUCCESS", "OTP verified")

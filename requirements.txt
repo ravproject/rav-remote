@@ -21,6 +21,11 @@ mss==9.0.2                 # Screenshot cross-platform
 psutil==5.9.8              # System monitoring
 paramiko==3.4.0            # SSH/SFTP
 PyYAML==6.0.1
+imageio
+imageio-ffmpeg
+opencv-python-headless
+SpeechRecognition
+pydub
 
 # Logging
 loguru==0.7.2

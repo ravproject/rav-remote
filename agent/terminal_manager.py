@@ -2,6 +2,7 @@
 Terminal Manager — Handles persistent PTY sessions for the agent.
 Supports non-blocking read/write and session lifecycle management.
 """
+import re
 import os
 import pty
 import select
@@ -11,6 +12,64 @@ import threading
 import time
 from typing import Dict, Optional
 from loguru import logger
+
+def strip_ansi_codes(text: str) -> str:
+    """
+    Remove ANSI escape sequences and OSC (Operating System Command) sequences.
+    Also squashes excessive newlines and filters out known noisy banners.
+    """
+    # 1. Remove ANSI/OSC sequences
+    ansi_escape = re.compile(r'''
+        \x1B(?:          # ESC
+            \[ [0-?]* [ -/]* [@-~] |    # CSI
+            \] .*? (?:\x1B\\|\x07) |    # OSC
+            [()#?] [0-?]* [ -/]* [@-~] | # Charset/Other
+            [@-Z\\-_]                   # 7-bit controls
+        )
+    ''', re.VERBOSE | re.DOTALL)
+    text = ansi_escape.sub('', text)
+
+    # 2. Filter out the specific noisy Gemini CLI migration banner
+    # This banner is large and repetitive in unpaid/Google One tiers.
+    banner_patterns = [
+        r"Gemini CLI will stop serving requests to Google One",
+        r"migrate to Antigravity CLI",
+        r"https://antigravity.google/cli/install.sh",
+        r"Gemini CLI v\d+\.\d+\.\d+",
+        r"Signed in with Google /auth",
+        r"Plan: Gemini Code Assist",
+        r"[▝▜▄▟▀▗]" # Catch the ASCII art blocks
+    ]
+    
+    # We remove the whole lines containing these patterns
+    lines = text.splitlines()
+    filtered_lines = []
+    skip_box = False
+    
+    for line in lines:
+        # Detect start of the announcement box
+        if "╭──" in line and "──╮" in line:
+            skip_box = True
+            continue
+        if "╰──" in line and "──╯" in line:
+            skip_box = False
+            continue
+            
+        if skip_box:
+            continue
+            
+        if any(re.search(p, line) for p in banner_patterns):
+            continue
+        
+        filtered_lines.append(line)
+    
+    text = "\n".join(filtered_lines)
+
+    # 3. Squash excessive newlines (3+ -> 2)
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    
+    # 4. Remove leading/trailing empty lines
+    return text.strip('\n')
 
 class TerminalSession:
     def __init__(self, user_id: str, shell: str = "/bin/bash"):
@@ -63,11 +122,17 @@ class TerminalSession:
             logger.error(f"Failed to write to terminal for {self.user_id}: {e}")
 
     def read(self) -> str:
-        """Read latest output from buffer and clear it."""
+        """Read latest output from buffer, strip ANSI codes, and clear it."""
         with self.lock:
-            data = self.output_buffer.decode(errors="replace")
-            self.output_buffer = b""
-            return data
+            if not self.output_buffer:
+                return ""
+            try:
+                data = self.output_buffer.decode(errors="replace")
+                self.output_buffer = b""
+                return strip_ansi_codes(data)
+            except Exception as e:
+                logger.error(f"Error reading terminal buffer: {e}")
+                return ""
 
     def close(self):
         """Close the terminal session and kill the process."""

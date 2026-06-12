@@ -14,11 +14,43 @@ from typing import Optional
 from jose import JWTError, jwt
 from functools import lru_cache
 from loguru import logger
+import json
 from .rate_limiter import check_rate_limit
 
 
-# Token blacklist (untuk logout/revoke)
+# Token blacklist (untuk logout/revoke) — dipersist agar tahan restart
+REVOKED_FILE = os.path.join(os.path.dirname(__file__), "..", "sessions", "revoked_tokens.json")
+
+# Global blacklist state
 _revoked_tokens: set[str] = set()
+
+def _load_revoked_tokens() -> set[str]:
+    global _revoked_tokens
+    if not os.path.exists(REVOKED_FILE):
+        return set()
+    try:
+        with open(REVOKED_FILE, "r") as f:
+            tokens = set(json.load(f))
+        # Pruning: Only keep tokens that are still valid (not expired)
+        valid_revoked = set()
+        for t in tokens:
+            if AuthManager.verify_session_token(t):
+                valid_revoked.add(t)
+        _revoked_tokens = valid_revoked
+        return _revoked_tokens
+    except Exception as e:
+        logger.error(f"Failed to load revoked tokens: {e}")
+        return set()
+
+def _save_revoked_tokens():
+    try:
+        os.makedirs(os.path.dirname(REVOKED_FILE), exist_ok=True)
+        # Pruning before saving
+        valid_revoked = [t for t in _revoked_tokens if AuthManager.verify_session_token(t)]
+        with open(REVOKED_FILE, "w") as f:
+            json.dump(valid_revoked, f)
+    except Exception as e:
+        logger.error(f"Failed to save revoked tokens: {e}")
 
 
 class AuthManager:
@@ -97,6 +129,7 @@ class AuthManager:
     def revoke_token(token: str):
         """Revoke token (logout)."""
         _revoked_tokens.add(token)
+        _save_revoked_tokens()
         logger.info("Session token revoked")
 
     @staticmethod
@@ -106,6 +139,9 @@ class AuthManager:
         Return True jika masih dalam batas.
         """
         return check_rate_limit(user_id)
+
+# Initialize revoked tokens after class definition
+_load_revoked_tokens()
 
 
 def require_auth(handler_func):

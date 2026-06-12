@@ -14,11 +14,19 @@ def take_screenshot() -> bytes | str:
     """
     Take a screenshot and return as PNG bytes, or string on error.
     """
+    # Try to ensure DISPLAY is set for X11 tools
+    if "DISPLAY" not in os.environ:
+        os.environ["DISPLAY"] = ":0"
+    
+    # Try to ensure XAUTHORITY is set if possible (often needed for XGetImage)
+    if "XAUTHORITY" not in os.environ:
+        home = os.path.expanduser("~")
+        xauth = os.path.join(home, ".Xauthority")
+        if os.path.exists(xauth):
+            os.environ["XAUTHORITY"] = xauth
+
     # 1. Coba mss dahulu (sangat cepat, bekerja di X11/Windows/macOS)
     try:
-        # Set DISPLAY just in case
-        if "DISPLAY" not in os.environ:
-            os.environ["DISPLAY"] = ":0"
         with mss.mss() as sct:
             monitor = sct.monitors[1]
             screenshot = sct.grab(monitor)
@@ -32,6 +40,20 @@ def take_screenshot() -> bytes | str:
     temp_file.close()
 
     try:
+        # Coba ffmpeg (Seringkali bekerja jika x11grab tersedia atau di beberapa lingkungan Wayland tertentu)
+        try:
+            # Gunakan -update 1 untuk menulis single frame
+            subprocess.run([
+                "ffmpeg", "-f", "x11grab", "-video_size", "1920x1080", "-i", os.environ.get("DISPLAY", ":0.0"),
+                "-frames:v", "1", "-update", "1", temp_path, "-y"
+            ], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=5)
+            with open(temp_path, "rb") as f:
+                data = f.read()
+            if data and len(data) > 100: # Validasi ukuran minimal
+                return data
+        except Exception as e:
+            logger.debug(f"FFmpeg screenshot fallback failed: {e}")
+
         # Coba gnome-screenshot (GNOME Wayland/X11)
         try:
             subprocess.run(["gnome-screenshot", "-f", temp_path], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=5)

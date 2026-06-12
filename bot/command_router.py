@@ -4,6 +4,7 @@ Command Router
 from ai_module.nim_client import CommandInterpreter
 from agent.command_handler import CommandHandler
 from security.audit_logger import AuditLogger
+from security.sanitizer import InputSanitizer
 from pathlib import Path
 import base64
 from loguru import logger
@@ -24,28 +25,35 @@ class CommandRouter:
                 return "⚠️ Akses Ditolak: " + args[0].split(":", 1)[1]
             return "❓ Perintah tidak dikenali. Ketik `!help` untuk bantuan."
 
+        # Whitelist validation
+        is_valid, _ = InputSanitizer.validate_command_whitelist(f"!{command_name}")
+        if not is_valid:
+            return f"❌ Perintah `{command_name}` tidak ada dalam whitelist keamanan."
+
         try:
             if command_name == "screenshot":
-                img_bytes = await self.handler.handle_screenshot()
+                res = await self.handler.handle_screenshot()
                 self.auditor.log_event(user_id, "SCREENSHOT", "")
-                return {"type": "photo", "data": img_bytes}
+                if isinstance(res, bytes):
+                    return {"type": "photo", "data": res}
+                return res # Return error message string
 
             elif command_name == "video":
                 duration = 5
                 if args and args[0].isdigit():
                     duration = min(int(args[0]), 15) # Max 15s
-                vid_bytes = await self.handler.handle_video(duration)
+                res = await self.handler.handle_video(duration)
                 self.auditor.log_event(user_id, "VIDEO", f"duration={duration}")
-                if vid_bytes:
-                    return {"type": "video", "data": vid_bytes}
-                return "❌ Gagal merekam video."
+                if isinstance(res, bytes):
+                    return {"type": "video", "data": res}
+                return res or "❌ Gagal merekam video."
 
             elif command_name == "webcam":
-                img_bytes = await self.handler.handle_webcam()
+                res = await self.handler.handle_webcam()
                 self.auditor.log_event(user_id, "WEBCAM", "")
-                if img_bytes:
-                    return {"type": "photo", "data": img_bytes}
-                return "❌ Gagal mengambil foto webcam (kamera digunakan atau tidak ada)."
+                if isinstance(res, bytes):
+                    return {"type": "photo", "data": res}
+                return res or "❌ Gagal mengambil foto webcam (kamera digunakan atau tidak ada)."
 
             elif command_name == "sysinfo":
                 info = await self.handler.handle_sysinfo()
@@ -85,6 +93,11 @@ class CommandRouter:
                 self.auditor.log_event(user_id, "RUN_SCRIPT", args[0][:50])
                 return result
 
+            elif command_name == "logout":
+                # Note: Actual session cleanup is handled by slash command /logout 
+                # in telegram_bot.py, but we provide a response for !logout here.
+                return "👋 Silakan gunakan perintah `/logout` untuk keluar dari sesi secara aman."
+
             elif command_name == "help":
                 return HELP_TEXT
 
@@ -102,9 +115,12 @@ HELP_TEXT = """
 
 *Perintah Tersedia:*
 `!screenshot` — Screenshot layar
+`!video <detik>` — Rekam layar (max 15s)
+`!webcam` — Foto webcam
 `!sysinfo` — Info CPU/RAM/Disk
 `!ls <path>` — List isi folder
 `!get <file>` — Kirim file ke HP
+`!term` — Mode Terminal Interaktif
 `!lock` — Kunci layar
 `!reboot` — Restart (butuh konfirmasi)
 `!run <script>` — Jalankan script aman
@@ -115,5 +131,6 @@ HELP_TEXT = """
 Ketik perintah natural language seperti:
 "Ambil screenshot layar sekarang"
 "Tampilkan info sistem"
+"Masuk ke mode terminal"
 "Kunci laptopku"
 """

@@ -40,6 +40,10 @@ class TerminalWriteRequest(BaseModel):
 class TerminalRequest(BaseModel):
     user_id: str
 
+class OTPRequest(BaseModel):
+    user_id: str
+    otp: str
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("🚀 Laptop Agent started")
@@ -143,16 +147,26 @@ async def execute_command(
 
     result = await router.route(clean_input, request.user_id)
 
-    if isinstance(result, bytes):
+    if isinstance(result, bytes): # Legacy fallback
         return {"type": "image", "content": base64.b64encode(result).decode()}
     elif isinstance(result, dict):
-        return {"type": "document", "content": {
-            "data": base64.b64encode(result["data"]).decode(),
-            "filename": result["filename"],
-            "mimetype": result["mimetype"],
-        }}
+        res_type = result.get("type")
+        if res_type == "photo":
+            return {"type": "image", "content": base64.b64encode(result["data"]).decode()}
+        elif res_type == "video":
+            return {"type": "video", "content": base64.b64encode(result["data"]).decode()}
+        elif "filename" in result and "data" in result:
+            return {"type": "document", "content": {
+                "data": base64.b64encode(result["data"]).decode(),
+                "filename": result["filename"],
+                "mimetype": result.get("mimetype", "application/octet-stream"),
+            }}
+        elif "error" in result:
+             return {"type": "text", "content": f"❌ {result['error']}"}
+        else:
+            return {"type": "text", "content": str(result)}
     else:
-        return {"type": "text", "content": result}
+        return {"type": "text", "content": str(result)}
 
 
 if __name__ == "__main__":

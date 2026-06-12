@@ -4,6 +4,7 @@ Module for file management operations.
 import os
 from pathlib import Path
 from security.sanitizer import InputSanitizer
+from loguru import logger
 
 def list_files(path: str) -> str:
     """

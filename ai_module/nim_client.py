@@ -109,11 +109,11 @@ class NIMClient:
         Meskipun AI sudah diberi prompt ketat, selalu validasi lagi.
         """
         valid_commands = {
-            "!screenshot", "!sysinfo", "!lock", "!reboot"
+            "!screenshot", "!sysinfo", "!lock", "!reboot", "!term", "!exit", "!help", "!video", "!webcam"
         }
 
         # Perintah dengan argumen
-        valid_prefixes = ("!ls ", "!get ", "!run ")
+        valid_prefixes = ("!ls ", "!get ", "!run ", "!video ")
 
         if command in valid_commands:
             return True

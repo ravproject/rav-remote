@@ -10,6 +10,7 @@ import asyncio
 from bot.telegram_bot import start_handler, otp_handler, message_handler
 from bot.auth import AuthManager
 import bot.telegram_bot as tg_bot
+from bot.rate_limiter import _user_command_times
 
 class TestE2E(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
@@ -20,8 +21,9 @@ class TestE2E(unittest.IsolatedAsyncioTestCase):
         os.environ["TELEGRAM_BOT_TOKEN"] = "mock_token"
         os.environ["AGENT_API_KEY"] = "mock_agent_key"
         
-        # Clear sessions
+        # Clear sessions and rate limit state
         tg_bot._user_sessions = {}
+        _user_command_times.clear()
         
         self.user_id = 12345
         self.totp = pyotp.TOTP("JBSWY3DPEHPK3PXP")
@@ -37,6 +39,8 @@ class TestE2E(unittest.IsolatedAsyncioTestCase):
         update.message.text = text
         update.message.reply_text = AsyncMock()
         update.message.reply_photo = AsyncMock()
+        update.message.reply_video = AsyncMock()
+        update.message.reply_document = AsyncMock()
         return update
 
     def create_mock_context(self, args=None):
@@ -71,10 +75,14 @@ class TestE2E(unittest.IsolatedAsyncioTestCase):
         update = self.create_mock_update("!sysinfo")
         context = self.create_mock_context()
         
-        with patch('bot.command_router.CommandRouter.route', new_callable=AsyncMock) as mock_route:
-            mock_route.return_value = "Mocked System Info: CPU 10%, RAM 4GB"
+        with patch('bot.telegram_bot.httpx.AsyncClient.post', new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = MagicMock(
+                status_code=200, 
+                json=lambda: {"type": "text", "content": "Mocked System Info: CPU 10%, RAM 4GB"}
+            )
             await message_handler(update, context)
             
+            # message_handler calls reply_text once with "⏳ Memproses..." and once with result
             self.assertEqual(update.message.reply_text.call_count, 2)
             last_call_args = update.message.reply_text.call_args_list[-1][0][0]
             self.assertIn("Mocked System Info", last_call_args)
@@ -87,17 +95,20 @@ class TestE2E(unittest.IsolatedAsyncioTestCase):
         update = self.create_mock_update("ambil screenshot")
         context = self.create_mock_context()
         
-        # Mock AI translation and CommandRouter
-        with patch('ai_module.nim_client.NIMClient.translate_to_command', new_callable=AsyncMock) as mock_translate:
-            mock_translate.return_value = "!screenshot"
-            with patch('bot.command_router.CommandRouter.route', new_callable=AsyncMock) as mock_route:
-                mock_route.return_value = b"fake_image_bytes"
-                await message_handler(update, context)
-                
-                # Verify reply_photo was called for image result
-                update.message.reply_photo.assert_called_once()
-                args, kwargs = update.message.reply_photo.call_args
-                self.assertEqual(args[0], b"fake_image_bytes")
+        import base64
+        fake_data = base64.b64encode(b"fake_image_bytes").decode()
+
+        with patch('bot.telegram_bot.httpx.AsyncClient.post', new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = MagicMock(
+                status_code=200,
+                json=lambda: {"type": "image", "content": fake_data}
+            )
+            await message_handler(update, context)
+            
+            # Verify reply_photo was called for image result
+            update.message.reply_photo.assert_called_once()
+            args, kwargs = update.message.reply_photo.call_args
+            self.assertEqual(args[0], b"fake_image_bytes")
 
     async def test_unauthorized_user(self):
         # User not in whitelist
@@ -178,18 +189,27 @@ class TestE2E(unittest.IsolatedAsyncioTestCase):
     async def test_mega_expansion_commands(self):
         """Test routing and response types for new features (!video, !webcam)."""
         tg_bot._user_sessions[str(self.user_id)] = AuthManager.generate_session_token(str(self.user_id))
-        
+        import base64
+
         # 1. Test !video
         update = self.create_mock_update("!video")
-        with patch('bot.telegram_bot.router.route', new_callable=AsyncMock) as mock_route:
-            mock_route.return_value = {"type": "video", "data": b"fake_mp4_bytes"}
+        fake_video = base64.b64encode(b"fake_mp4_bytes").decode()
+        with patch('bot.telegram_bot.httpx.AsyncClient.post', new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = MagicMock(
+                status_code=200,
+                json=lambda: {"type": "video", "content": fake_video}
+            )
             await message_handler(update, self.create_mock_context())
             update.message.reply_video.assert_called_once_with(b"fake_mp4_bytes", caption="📹 Live Stream")
 
         # 2. Test !webcam
         update = self.create_mock_update("!webcam")
-        with patch('bot.telegram_bot.router.route', new_callable=AsyncMock) as mock_route:
-            mock_route.return_value = {"type": "photo", "data": b"fake_jpg_bytes"}
+        fake_photo = base64.b64encode(b"fake_jpg_bytes").decode()
+        with patch('bot.telegram_bot.httpx.AsyncClient.post', new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = MagicMock(
+                status_code=200,
+                json=lambda: {"type": "image", "content": fake_photo}
+            )
             await message_handler(update, self.create_mock_context())
             update.message.reply_photo.assert_called_once_with(b"fake_jpg_bytes", caption="📸 Berhasil")
 
@@ -235,6 +255,66 @@ class TestE2E(unittest.IsolatedAsyncioTestCase):
         # Cleanup
         if os.path.exists(dummy_ogg.name): os.remove(dummy_ogg.name)
         if os.path.exists(dummy_wav): os.remove(dummy_wav)
+
+    async def test_ai_takeover_and_fallback(self):
+        """Test AI takeover for natural language and fallback when AI fails/refuses."""
+        # 1. Login
+        tg_bot._user_sessions[str(self.user_id)] = AuthManager.generate_session_token(str(self.user_id))
+        _user_command_times.clear() # Reset rate limit
+        
+        # 2. Case: Natural language translates to command
+        update = self.create_mock_update("tunjukkan info laptop")
+        with patch('bot.telegram_bot.httpx.AsyncClient.post', new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = MagicMock(
+                status_code=200,
+                json=lambda: {"type": "text", "content": "CPU: 10%"}
+            )
+            await message_handler(update, self.create_mock_context())
+            # Verify sysinfo output found
+            calls = [str(c) for c in update.message.reply_text.call_args_list]
+            self.assertTrue(any("CPU: 10%" in c for c in calls), f"CPU: 10% not in {calls}")
+
+        # 3. Case: AI handles chat/non-command (AI "Chat" mode)
+        update = self.create_mock_update("halo apa kabar?")
+        _user_command_times.clear() # Reset rate limit
+        with patch('bot.telegram_bot.httpx.AsyncClient.post', new_callable=AsyncMock) as mock_post:
+            ai_msg = "Halo! Saya asisten remote Anda."
+            mock_post.return_value = MagicMock(
+                status_code=200,
+                json=lambda: {"type": "text", "content": ai_msg}
+            )
+            await message_handler(update, self.create_mock_context())
+            # Verify AI chat found
+            calls = [str(c) for c in update.message.reply_text.call_args_list]
+            self.assertTrue(any(ai_msg in c for c in calls), f"'{ai_msg}' not in {calls}")
+
+        # 4. Case: AI fails -> Fallback to explicit
+        update = self.create_mock_update("perintah ngaco")
+        _user_command_times.clear() # Reset rate limit
+        with patch('bot.telegram_bot.httpx.AsyncClient.post', new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = MagicMock(
+                status_code=200,
+                json=lambda: {"type": "text", "content": "❓ Perintah tidak dikenali. Ketik `!help` untuk bantuan."}
+            )
+            await message_handler(update, self.create_mock_context())
+            # Verify fallback message found
+            calls = [str(c) for c in update.message.reply_text.call_args_list]
+            self.assertTrue(any("tidak dikenali" in c for c in calls), f"'tidak dikenali' not in {calls}")
+
+    async def test_ai_safety_validation(self):
+        """Test that AI-generated dangerous commands are blocked."""
+        tg_bot._user_sessions[str(self.user_id)] = AuthManager.generate_session_token(str(self.user_id))
+        
+        update = self.create_mock_update("jalankan rm -rf")
+        with patch('bot.telegram_bot.httpx.AsyncClient.post', new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = MagicMock(
+                status_code=400,
+                json=lambda: {"detail": "Input tidak valid atau berbahaya"}
+            )
+            await message_handler(update, self.create_mock_context())
+            
+            last_call = update.message.reply_text.call_args_list[-1][0][0]
+            self.assertIn("bahaya", last_call.lower())
 
 if __name__ == '__main__':
     unittest.main()
