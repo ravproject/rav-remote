@@ -1,22 +1,56 @@
 """
-Cryptography module for encrypting and decrypting data.
+Modul Kriptografi — Proteksi data sensitif at-rest.
+Menggunakan Fernet (AES-128-CBC) dengan key yang diturunkan dari ENCRYPTION_KEY.
+Mendukung key rotation melalui MultiFernet.
 """
 import os
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+import base64
+import hashlib
+from cryptography.fernet import Fernet, MultiFernet
+from loguru import logger
 
-def encrypt(data: bytes, key: bytes) -> bytes:
-    """
-    Encrypts data using AES-256-GCM.
-    """
-    aesgcm = AESGCM(key)
-    nonce = os.urandom(12)
-    return nonce + aesgcm.encrypt(nonce, data, None)
+class CryptoManager:
+    def __init__(self):
+        secret = os.environ.get("ENCRYPTION_KEY")
+        
+        # Enforce strong key requirement
+        if not secret:
+            raise RuntimeError(
+                "ENCRYPTION_KEY tidak ditemukan di environment. "
+                "Jalankan scripts/rotate_secrets.py untuk generate."
+            )
+        
+        if len(secret) < 32:
+            raise ValueError("ENCRYPTION_KEY terlalu pendek — minimal 32 karakter untuk keamanan.")
 
-def decrypt(token: bytes, key: bytes) -> bytes:
-    """
-    Decrypts data using AES-256-GCM.
-    """
-    aesgcm = AESGCM(key)
-    nonce = token[:12]
-    ciphertext = token[12:]
-    return aesgcm.decrypt(nonce, ciphertext, None)
+        # Primary key derivation
+        primary_key = self._derive_key(secret)
+        
+        # MultiFernet support for future rotation
+        self.fernet = MultiFernet([Fernet(primary_key)])
+        logger.debug("CryptoManager initialized with MultiFernet (Strict Mode)")
+
+    def _derive_key(self, secret: str) -> bytes:
+        """
+        Turunkan key Fernet (32 bytes base64) dari secret.
+        Known limitation: Static salt means same secret + same salt = same key across installs.
+        """
+        key = hashlib.pbkdf2_hmac(
+            'sha256',
+            secret.encode(),
+            b'rav-remote-salt-v1',
+            iterations=100_000
+        )
+        return base64.urlsafe_b64encode(key)
+
+    def encrypt(self, data: str) -> str:
+        """Enkripsi string ke string base64."""
+        return self.fernet.encrypt(data.encode()).decode()
+
+    def decrypt(self, encrypted_data: str) -> str:
+        """Dekripsi string base64 ke string original."""
+        return self.fernet.decrypt(encrypted_data.encode()).decode()
+
+# Singleton instance - Choice A (Strict Fail-Closed)
+# Any failure here will (and should) cause the application to fail to import/start.
+crypto = CryptoManager()

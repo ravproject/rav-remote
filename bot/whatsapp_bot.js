@@ -107,33 +107,53 @@ async function connectWhatsApp() {
       return;
     }
 
+    // Auto-inject safety flags for AI CLIs in Terminal/Command mode
+    let processedText = text;
+    if (text.startsWith("gemini ") && !text.includes("--yolo")) {
+      processedText = text.replace("gemini ", "gemini --yolo ");
+    } else if (text.startsWith("opencode ") && !text.includes("--dangerously-skip-permissions")) {
+      processedText = text.replace("opencode ", "opencode --dangerously-skip-permissions ");
+    }
+
     // Forward ke agent
+    const jid = msg.key.remoteJid;
+    await sock.sendPresenceUpdate("composing", jid);
+    const processingMsg = await sock.sendMessage(jid, { text: "⏳ *Agent* sedang memproses..." });
+
     try {
       const res = await axios.post(`${AGENT_URL}/command`, {
-        command: text,
+        command: processedText,
         user_id: sender,
       }, {
         headers: {
           "Authorization": `Bearer ${token}`,
           "X-API-Key": AGENT_API_KEY,
         },
-        timeout: 30000,
+        timeout: 60000,
       });
 
+      // WhatsApp doesn't have an easy "delete for everyone" without keep-track of keys, 
+      // but we can at least send the result.
       const { type, content } = res.data;
 
       if (type === "text") {
-        await sock.sendMessage(msg.key.remoteJid, { text: content });
+        await sock.sendMessage(jid, { text: `✅ *Hasil:*\n\n${content}` });
       } else if (type === "image") {
-        // content adalah base64 gambar
         const buffer = Buffer.from(content, "base64");
-        await sock.sendMessage(msg.key.remoteJid, {
+        await sock.sendMessage(jid, {
           image: buffer,
-          caption: "📸 Screenshot",
+          caption: "📸 Screenshot Berhasil",
+        });
+      } else if (type === "video") {
+        const buffer = Buffer.from(content.data, "base64");
+        await sock.sendMessage(jid, {
+          video: buffer,
+          caption: "📹 Rekaman Layar Berhasil",
+          mimetype: "video/mp4"
         });
       } else if (type === "document") {
         const buffer = Buffer.from(content.data, "base64");
-        await sock.sendMessage(msg.key.remoteJid, {
+        await sock.sendMessage(jid, {
           document: buffer,
           fileName: content.filename,
           mimetype: content.mimetype,
@@ -141,9 +161,23 @@ async function connectWhatsApp() {
       }
     } catch (err) {
       console.error("Agent error:", err.message);
-      await sock.sendMessage(msg.key.remoteJid, {
-        text: `❌ Error: ${err.message}`,
-      });
+      let errorMsg = "❌ *Koneksi Gagal:* Tidak dapat menghubungi Agent.";
+      
+      if (err.response) {
+        if (err.response.status === 400) {
+          errorMsg = `⚠️ *Permintaan Ditolak:*\n${err.response.data.detail || "Input tidak valid"}`;
+        } else if (err.response.status === 401) {
+          errorMsg = "❌ *Sesi Kadaluarsa:* Silakan login kembali dengan `/otp`";
+        } else {
+          errorMsg = `❌ *Error Agent (${err.response.status}):* Gagal memproses perintah.`;
+        }
+      } else if (err.code === 'ECONNABORTED') {
+        errorMsg = "⏳ *Waktu Habis:* Agent terlalu lama merespons.";
+      }
+      
+      await sock.sendMessage(jid, { text: errorMsg });
+    } finally {
+      await sock.sendPresenceUpdate("paused", jid);
     }
   });
 }

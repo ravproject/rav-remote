@@ -18,11 +18,12 @@ def capture_webcam() -> Optional[bytes]:
             logger.error("Webcam not accessible.")
             return None
             
-        # Give camera a moment to adjust lighting
-        import time
-        time.sleep(0.5)
+        # Give camera a moment to adjust lighting (warm-up)
+        # Reading multiple frames is better than just sleeping
+        for _ in range(10):
+            cap.read()
         
-        # Read frame
+        # Read final frame
         ret, frame = cap.read()
         cap.release()
         

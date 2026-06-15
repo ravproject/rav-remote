@@ -18,6 +18,8 @@ from security.sanitizer import InputSanitizer
 from bot.auth import AuthManager
 from .file_manager import save_file
 from .battery_monitor import battery_monitor
+from .system_monitor import sys_monitor
+from security.watchdog import watchdog
 
 AGENT_API_KEY = os.environ["AGENT_API_KEY"]
 api_key_header = APIKeyHeader(name="X-API-Key")
@@ -62,10 +64,25 @@ async def verify_api_key(x_api_key: str = Header(...)):
         raise HTTPException(status_code=403, detail="Invalid API key")
     return x_api_key
 
+@app.get("/system/heartbeat")
+async def heartbeat(_=Depends(verify_api_key)):
+    """Heartbeat endpoint for Bot polling (Scenario C/VPN)."""
+    metrics = sys_monitor.get_metrics()
+    # Check for anomalies
+    anomalies = watchdog.check_system_anomalies(metrics["cpu"], metrics["ram"])
+    return {
+        "status": "ONLINE",
+        "metrics": metrics,
+        "alerts": anomalies
+    }
+
 @app.get("/system/alerts")
 async def get_alerts(_=Depends(verify_api_key)):
-    alerts = battery_monitor.get_alerts()
-    return {"alerts": alerts}
+    # Combine battery alerts with watchdog anomalies
+    metrics = sys_monitor.get_metrics()
+    anomalies = watchdog.check_system_anomalies(metrics["cpu"], metrics["ram"])
+    battery = battery_monitor.get_alerts()
+    return {"alerts": anomalies + battery}
 
 
 @app.post("/auth/verify-otp")
@@ -73,7 +90,12 @@ async def verify_otp(request: OTPRequest, _=Depends(verify_api_key)):
     if AuthManager.verify_otp(request.otp):
         token = AuthManager.generate_session_token(request.user_id)
         return {"token": token}
-    raise HTTPException(status_code=401, detail="Invalid OTP")
+    else:
+        # Record failure for watchdog
+        is_brute = watchdog.record_otp_failure(request.user_id)
+        if is_brute:
+             logger.critical(f"Suspicious activity: Excessive OTP failures for {request.user_id}")
+        raise HTTPException(status_code=401, detail="Invalid OTP")
 
 
 @app.post("/terminal/start")
@@ -154,19 +176,41 @@ async def execute_command(
         if res_type == "photo":
             return {"type": "image", "content": base64.b64encode(result["data"]).decode()}
         elif res_type == "video":
-            return {"type": "video", "content": base64.b64encode(result["data"]).decode()}
-        elif "filename" in result and "data" in result:
+            return {"type": "video", "content": {
+                "data": base64.b64encode(result["data"]).decode(),
+                "filename": result.get("filename", "screen_record.mp4"),
+                "mimetype": result.get("mimetype", "video/mp4"),
+            }}
+        elif res_type == "document" or ("filename" in result and "data" in result):
             return {"type": "document", "content": {
                 "data": base64.b64encode(result["data"]).decode(),
-                "filename": result["filename"],
+                "filename": result.get("filename", "file.dat"),
                 "mimetype": result.get("mimetype", "application/octet-stream"),
             }}
         elif "error" in result:
              return {"type": "text", "content": f"❌ {result['error']}"}
         else:
-            return {"type": "text", "content": str(result)}
+            final_text = str(result)
+            if len(final_text) > 4000:
+                return {"type": "document", "content": {
+                    "data": base64.b64encode(final_text.encode()).decode(),
+                    "filename": "output.txt",
+                    "mimetype": "text/plain",
+                }}
+            return {"type": "text", "content": final_text}
     else:
-        return {"type": "text", "content": str(result)}
+        # Check if result is the specific summary from sys_monitor
+        final_text = str(result)
+        if request.command.strip() == "!sysinfo":
+             final_text = sys_monitor.get_system_summary()
+             
+        if len(final_text) > 4000:
+            return {"type": "document", "content": {
+                "data": base64.b64encode(final_text.encode()).decode(),
+                "filename": "output.txt",
+                "mimetype": "text/plain",
+            }}
+        return {"type": "text", "content": final_text}
 
 
 if __name__ == "__main__":

@@ -14,6 +14,8 @@ class FallbackParser:
         "!ss": "screenshot",
         "!video": "video",
         "!webcam": "webcam",
+        "!webcamvid": "webcamvid",
+        "!camvid": "webcamvid",
         "!sysinfo": "sysinfo",
         "!info": "sysinfo",
         "!ls": "list_files",
@@ -22,6 +24,8 @@ class FallbackParser:
         "!kunci": "lock_screen",
         "!reboot": "reboot",
         "!run": "run_script",
+        "!testai": "testai",
+        "!test-ai": "testai",
         "!help": "help",
         "!logout": "logout",
     }

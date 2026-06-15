@@ -1,6 +1,6 @@
 """
 Audit Logger — Catat semua aktivitas sistem
-Format: JSON terstruktur untuk kemudahan analisis
+Format: JSON terstruktur (Terenkripsi At-Rest)
 """
 import os
 import json
@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from loguru import logger
 import sys
+from security.crypto import crypto
 
 
 LOG_FILE = Path(os.environ.get("LOG_FILE", "./logs/audit.log"))
@@ -29,7 +30,7 @@ class AuditLogger:
             colorize=True,
         )
 
-        # File audit log (JSON format)
+        # File audit log (Format terenkripsi per baris)
         logger.add(
             str(LOG_FILE),
             format="{message}",
@@ -49,20 +50,38 @@ class AuditLogger:
     ):
         """
         Catat event ke audit log.
-        Format: JSON satu baris per event.
+        Format: JSON satu baris per event (terenkripsi).
         """
         # Hash user_id untuk privasi di log
         user_hash = hashlib.sha256(user_id.encode()).hexdigest()[:12]
 
         entry = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "user_hash": user_hash,    # Hash, bukan ID asli
+            "user_hash": user_hash,
             "event_type": event_type,
-            "details": details[:200],  # Batasi panjang
+            "details": details[:200],
             "success": success,
         }
 
-        logger.info(json.dumps(entry, ensure_ascii=False))
+        SENSITIVE_EVENTS = ("SECURITY_ALERT", "AUTH_FAILURE", "TOKEN_REVOKED", "LOGIN_SUCCESS")
+
+        try:
+            if crypto is None:
+                raise RuntimeError("CryptoManager not initialized")
+            
+            json_entry = json.dumps(entry, ensure_ascii=False)
+            encrypted_entry = crypto.encrypt(json_entry)
+            logger.info(encrypted_entry)
+        except Exception as e:
+            # Fail-Closed for sensitive events
+            if event_type in SENSITIVE_EVENTS:
+                logger.error(f"KRITIS: Enkripsi gagal untuk event sensitif '{event_type}'. Event TIDAK dicatat.")
+                # We don't raise here to prevent crashing the whole app, 
+                # but we strictly do NOT log the sensitive data in plaintext.
+            else:
+                # Fail-Open for non-sensitive events (e.g., SCREENSHOT, SYSINFO)
+                logger.warning(f"Enkripsi fallback untuk event non-sensitif: {event_type}")
+                logger.info(json.dumps(entry, ensure_ascii=False))
 
     def log_security_alert(self, user_id: str, threat_type: str, raw_input: str):
         """Log khusus untuk ancaman keamanan — level CRITICAL."""
@@ -77,4 +96,13 @@ class AuditLogger:
             "success": False,
         }
 
-        logger.critical(json.dumps(entry, ensure_ascii=False))
+        try:
+            if crypto is None:
+                raise RuntimeError("CryptoManager not initialized")
+            
+            json_entry = json.dumps(entry, ensure_ascii=False)
+            encrypted_entry = crypto.encrypt(json_entry)
+            logger.critical(encrypted_entry)
+        except Exception as e:
+            # Security alerts are ALWAYS sensitive: Fail-Closed
+            logger.error(f"KRITIS: Enkripsi gagal untuk SECURITY_ALERT. Alert TIDAK dicatat untuk mencegah kebocoran plaintext.")

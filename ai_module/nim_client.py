@@ -8,6 +8,7 @@ import re
 import json
 import asyncio
 import httpx
+import platform
 from typing import Optional
 from loguru import logger
 from .fallback_parser import FallbackParser
@@ -21,52 +22,66 @@ NIM_BASE_URL = os.environ.get(
 NIM_MODEL = os.environ.get("NVIDIA_NIM_MODEL", "meta/llama-3.1-70b-instruct")
 AI_ENABLED = os.environ.get("AI_MODE_ENABLED", "true").lower() == "true"
 
-# Timeout untuk API call
-API_TIMEOUT = 15.0
+# Timeout untuk API call (LLM might be slow)
+API_TIMEOUT = 30.0
 
 class NIMClient:
 
     def __init__(self):
         self.enabled = AI_ENABLED and bool(NIM_API_KEY)
+        self.history = [] # Memori chat: [{"role": "...", "content": "..."}]
+        self.current_os = platform.system()
         if not NIM_API_KEY and AI_ENABLED:
             logger.warning("AI mode enabled tapi NVIDIA_NIM_API_KEY tidak di-set. Fallback ke explicit mode.")
 
     async def translate_to_command(self, natural_input: str) -> Optional[str]:
         """
-        Terjemahkan natural language ke perintah sistem.
-        Return None jika harus fallback ke explicit parser.
+        Terjemahkan natural language ke perintah sistem dengan memori.
         """
         if not self.enabled:
-            return None  # Signal untuk fallback
+            return None
 
-        # Cek apakah input sudah berupa explicit command
         if natural_input.startswith("!"):
-            return None  # Langsung ke explicit parser
+            return None
 
         try:
-            return await self._call_nim_api(natural_input)
-        except (httpx.TimeoutException, httpx.ConnectError) as e:
-            logger.warning(f"NIM API timeout/connection error: {e}. Falling back to explicit mode.")
-            return None
+            # 1. Update history (User message)
+            self.history.append({"role": "user", "content": natural_input[:500]})
+            
+            # 2. Call API with context
+            ai_response = await self._call_nim_api()
+            
+            if ai_response:
+                # 3. Update history (Assistant response)
+                self.history.append({"role": "assistant", "content": ai_response})
+                
+                # 4. Sliding window: simpan hanya 10 pesan terakhir (5 turns)
+                if len(self.history) > 10:
+                    self.history = self.history[-10:]
+                    
+            return ai_response
         except Exception as e:
-            logger.error(f"NIM API unexpected error: {e}. Falling back to explicit mode.")
+            logger.error(f"NIM contextual error: {e}")
             return None
 
-    async def _call_nim_api(self, user_input: str) -> Optional[str]:
-        """Panggil NVIDIA NIM API."""
+    async def _call_nim_api(self) -> Optional[str]:
+        """Panggil NVIDIA NIM API dengan konteks history dan OS awareness."""
         headers = {
             "Authorization": f"Bearer {NIM_API_KEY}",
             "Content-Type": "application/json",
         }
 
+        # Inject current OS into prompt
+        formatted_prompt = SYSTEM_PROMPT.format(current_os=self.current_os)
+
+        # Gunakan history + formatted system prompt
+        messages = [{"role": "system", "content": formatted_prompt}] + self.history
+
         payload = {
             "model": NIM_MODEL,
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_input[:500]},  # Batasi input
-            ],
-            "max_tokens": 100,
-            "temperature": 0.1,  # Rendah untuk konsistensi
+            "messages": messages,
+            "max_tokens": 150,
+            "temperature": 0.1,
         }
 
         async with httpx.AsyncClient(timeout=API_TIMEOUT) as client:
@@ -79,8 +94,7 @@ class NIMClient:
 
         data = response.json()
         raw_output = data["choices"][0]["message"]["content"].strip()
-        logger.debug(f"NIM raw output: {raw_output}")
-
+        
         # Parse JSON response
         try:
             parsed = json.loads(raw_output)
@@ -88,38 +102,27 @@ class NIMClient:
             reason = parsed.get("reason", "")
 
             if command in ("UNKNOWN", "BLOCKED", "CHAT"):
-                logger.info(f"NIM blocked/unknown/chat: {reason}")
                 return f"__NIM_{command}__:{reason}"
 
-            # Validasi command yang dihasilkan AI tetap aman
             if not self._validate_ai_output(command):
-                logger.warning(f"NIM output failed validation: {command}")
                 return None
 
-            logger.info(f"NIM translated '{user_input[:50]}' → '{command}'")
             return command
-
-        except json.JSONDecodeError:
-            logger.warning(f"NIM returned non-JSON: {raw_output}")
+        except:
             return None
 
     def _validate_ai_output(self, command: str) -> bool:
-        """
-        VALIDASI KEDUA pada output AI.
-        Meskipun AI sudah diberi prompt ketat, selalu validasi lagi.
-        """
+        """Validasi output AI untuk fitur terbaru."""
         valid_commands = {
-            "!screenshot", "!sysinfo", "!lock", "!reboot", "!term", "!exit", "!help", "!video", "!webcam"
+            "!screenshot", "!sysinfo", "!lock", "!reboot", "!term", "!exit", "!help", "!video", "!webcam", "!webcamvid"
         }
-
-        # Perintah dengan argumen
-        valid_prefixes = ("!ls ", "!get ", "!run ", "!video ")
+        valid_prefixes = ("!ls ", "!get ", "!run ", "!video ", "!cd ", "!gemini ", "!opencode ", "!antigravity ")
 
         if command in valid_commands:
             return True
 
         if any(command.startswith(p) for p in valid_prefixes):
-            # Cek argumen tidak mengandung karakter berbahaya
+            # Cek argumen berbahaya
             arg = command.split(" ", 1)[1] if " " in command else ""
             dangerous_chars = set(";&|`$\x00")
             return not any(c in arg for c in dangerous_chars)

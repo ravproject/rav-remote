@@ -11,11 +11,15 @@ import pyotp
 import hashlib
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-from jose import JWTError, jwt
+import jwt  # PyJWT
+from jwt.exceptions import InvalidTokenError
 from functools import lru_cache
 from loguru import logger
 import json
 from .rate_limiter import check_rate_limit
+
+
+from security.crypto import crypto
 
 
 # Token blacklist (untuk logout/revoke) — dipersist agar tahan restart
@@ -30,7 +34,11 @@ def _load_revoked_tokens() -> set[str]:
         return set()
     try:
         with open(REVOKED_FILE, "r") as f:
-            tokens = set(json.load(f))
+            encrypted_data = f.read().strip()
+            if not encrypted_data:
+                return set()
+            decrypted_data = crypto.decrypt(encrypted_data)
+            tokens = set(json.loads(decrypted_data))
         # Pruning: Only keep tokens that are still valid (not expired)
         valid_revoked = set()
         for t in tokens:
@@ -39,7 +47,7 @@ def _load_revoked_tokens() -> set[str]:
         _revoked_tokens = valid_revoked
         return _revoked_tokens
     except Exception as e:
-        logger.error(f"Failed to load revoked tokens: {e}")
+        logger.error(f"Failed to load/decrypt revoked tokens: {e}")
         return set()
 
 def _save_revoked_tokens():
@@ -47,10 +55,12 @@ def _save_revoked_tokens():
         os.makedirs(os.path.dirname(REVOKED_FILE), exist_ok=True)
         # Pruning before saving
         valid_revoked = [t for t in _revoked_tokens if AuthManager.verify_session_token(t)]
+        json_data = json.dumps(valid_revoked)
+        encrypted_data = crypto.encrypt(json_data)
         with open(REVOKED_FILE, "w") as f:
-            json.dump(valid_revoked, f)
+            f.write(encrypted_data)
     except Exception as e:
-        logger.error(f"Failed to save revoked tokens: {e}")
+        logger.error(f"Failed to save/encrypt revoked tokens: {e}")
 
 
 class AuthManager:
@@ -79,14 +89,15 @@ class AuthManager:
     def verify_otp(otp_input: str) -> bool:
         """
         Verifikasi TOTP code (compatible dengan Google Authenticator).
-        Window=1 berarti toleransi ±30 detik.
         """
+        import time
         secret = AuthManager._get_otp_secret()
         if not secret:
             logger.error("OTP_SECRET_KEY not set")
             return False
         totp = pyotp.TOTP(secret)
-        valid = totp.verify(otp_input, valid_window=1)
+        # Gunakan time.time() eksplisit yang selalu UTC
+        valid = totp.verify(otp_input, for_time=time.time(), valid_window=2)
         if not valid:
             logger.warning(f"Invalid OTP attempt: {otp_input[:6]}")
         return valid
@@ -95,13 +106,13 @@ class AuthManager:
     def generate_session_token(user_id: str) -> str:
         """
         Generate JWT token setelah OTP berhasil.
-        Berlaku 4 jam.
+        Berlaku 24 jam.
         """
         now = datetime.now(timezone.utc)
         payload = {
             "sub": str(user_id),
             "iat": now,
-            "exp": now + timedelta(hours=4),
+            "exp": now + timedelta(hours=24),
             "jti": hashlib.sha256(
                 f"{user_id}{time.time()}".encode()
             ).hexdigest()[:16],
@@ -121,7 +132,7 @@ class AuthManager:
         try:
             payload = jwt.decode(token, AuthManager._get_jwt_secret(), algorithms=["HS256"])
             return payload.get("sub")
-        except JWTError as e:
+        except InvalidTokenError as e:
             logger.warning(f"Invalid JWT: {e}")
             return None
 

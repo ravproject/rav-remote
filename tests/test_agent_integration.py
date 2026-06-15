@@ -18,8 +18,9 @@ from bot.auth import AuthManager
 
 class TestAgentIntegration(unittest.TestCase):
     def setUp(self):
+        from agent.main import AGENT_API_KEY
         self.client = TestClient(app)
-        self.api_key = os.environ["AGENT_API_KEY"]
+        self.api_key = AGENT_API_KEY
         
         self.user_id = "12345"
         self.token = AuthManager.generate_session_token(self.user_id)
@@ -47,19 +48,18 @@ class TestAgentIntegration(unittest.TestCase):
     def test_command_sysinfo_json_flow(self):
         """Test that !sysinfo returns the correct JSON structure."""
         with patch('agent.command_handler.CommandHandler.handle_sysinfo', new_callable=AsyncMock) as mock_info:
-            mock_info.return_value = "CPU: 10%"
-            
+            mock_info.return_value = "💻 *System Info*\nCPU: 10%"
+
             response = self.client.post(
                 "/command",
                 json={"command": "!sysinfo", "user_id": self.user_id},
                 headers=self.headers
             )
-            
+
             self.assertEqual(response.status_code, 200, f"Expected 200, got {response.status_code}: {response.text}")
             data = response.json()
             self.assertEqual(data["type"], "text")
-            self.assertEqual(data["content"], "CPU: 10%")
-
+            self.assertIn("System Info", data["content"])
     def test_command_video_json_flow(self):
         """Test that !video returns the correct JSON structure."""
         with patch('agent.command_handler.CommandHandler.handle_video', new_callable=AsyncMock) as mock_video:

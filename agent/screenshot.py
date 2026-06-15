@@ -1,99 +1,85 @@
-"""
-Module for taking screenshots.
-"""
-import mss
-import mss.tools
-from loguru import logger
-
 import os
 import subprocess
 import tempfile
-from typing import Union
+import platform
+from loguru import logger
 
 def take_screenshot() -> bytes | str:
     """
-    Take a screenshot and return as PNG bytes, or string on error.
+    Enhanced screenshot taker for Cross-Platform (Windows, Linux, macOS).
+    Automatically detects OS and uses the most silent/effective method.
     """
-    # Try to ensure DISPLAY is set for X11 tools
-    if "DISPLAY" not in os.environ:
-        os.environ["DISPLAY"] = ":0"
-    
-    # Try to ensure XAUTHORITY is set if possible (often needed for XGetImage)
-    if "XAUTHORITY" not in os.environ:
-        home = os.path.expanduser("~")
-        xauth = os.path.join(home, ".Xauthority")
-        if os.path.exists(xauth):
-            os.environ["XAUTHORITY"] = xauth
-
-    # 1. Coba mss dahulu (sangat cepat, bekerja di X11/Windows/macOS)
-    try:
-        with mss.mss() as sct:
-            monitor = sct.monitors[1]
-            screenshot = sct.grab(monitor)
-            return mss.tools.to_png(screenshot.rgb, screenshot.size)
-    except Exception as mss_err:
-        logger.warning(f"MSS screenshot failed: {mss_err}. Mencoba fallback Wayland/CLI...")
-
-    # 2. Fallback untuk Wayland / CLI tools
+    current_os = platform.system()
     temp_file = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
     temp_path = temp_file.name
     temp_file.close()
 
     try:
-        # Coba ffmpeg (Seringkali bekerja jika x11grab tersedia atau di beberapa lingkungan Wayland tertentu)
-        try:
-            # Gunakan -update 1 untuk menulis single frame
-            subprocess.run([
-                "ffmpeg", "-f", "x11grab", "-video_size", "1920x1080", "-i", os.environ.get("DISPLAY", ":0.0"),
-                "-frames:v", "1", "-update", "1", temp_path, "-y"
-            ], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=5)
-            with open(temp_path, "rb") as f:
-                data = f.read()
-            if data and len(data) > 100: # Validasi ukuran minimal
-                return data
-        except Exception as e:
-            logger.debug(f"FFmpeg screenshot fallback failed: {e}")
+        if current_os == "Linux":
+            # Linux logic (optimized for Wayland/GNOME)
+            # 1. Super Silent Mode: Disable animations
+            subprocess.run(["gsettings", "set", "org.gnome.desktop.interface", "enable-animations", "false"], capture_output=True)
+            
+            # 2. Try flameshot (Works on Wayland)
+            try:
+                subprocess.run(["flameshot", "config", "--notifications", "false"], capture_output=True)
+                subprocess.run(["flameshot", "full", "-p", temp_path], check=True, capture_output=True, timeout=10)
+                if os.path.exists(temp_path) and os.path.getsize(temp_path) > 0:
+                    with open(temp_path, "rb") as f: return f.read()
+            except: pass
 
-        # Coba gnome-screenshot (GNOME Wayland/X11)
-        try:
-            subprocess.run(["gnome-screenshot", "-f", temp_path], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=5)
-            with open(temp_path, "rb") as f:
-                data = f.read()
-            if data and len(data) > 0:
-                return data
-            raise ValueError("Screenshot file is empty")
-        except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired, ValueError) as e:
-            logger.warning(f"gnome-screenshot failed or timed out: {e}")
+            # 3. Try DBus fallback
+            try:
+                cmd = ["dbus-send", "--session", "--print-reply", "--dest=org.gnome.Shell.Screenshot", "/org/gnome/Shell/Screenshot", "org.gnome.Shell.Screenshot.Screenshot", "boolean:false", "boolean:false", f"string:{temp_path}"]
+                subprocess.run(cmd, capture_output=True, timeout=5)
+                if os.path.exists(temp_path) and os.path.getsize(temp_path) > 0:
+                    with open(temp_path, "rb") as f: return f.read()
+            except: pass
 
-        # Coba grim (Sway/wlroots Wayland)
-        try:
-            subprocess.run(["grim", temp_path], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=5)
-            with open(temp_path, "rb") as f:
-                data = f.read()
-            if data and len(data) > 0:
-                return data
-            raise ValueError("Screenshot file is empty")
-        except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired, ValueError):
-            pass
+        elif current_os == "Windows":
+            # Windows logic: MSS is very silent and reliable
+            try:
+                import mss
+                import mss.tools
+                with mss.mss() as sct:
+                    # Capture primary monitor
+                    monitor = sct.monitors[1]
+                    sct_img = sct.grab(monitor)
+                    return mss.tools.to_png(sct_img.rgb, sct_img.size)
+            except Exception as e:
+                logger.debug(f"MSS Windows failed: {e}")
 
-        # Coba spectacle (KDE Wayland/X11)
-        try:
-            subprocess.run(["spectacle", "-b", "-n", "-o", temp_path], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=5)
-            with open(temp_path, "rb") as f:
-                data = f.read()
-            if data and len(data) > 0:
-                return data
-            raise ValueError("Screenshot file is empty")
-        except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired, ValueError):
-            pass
+        elif current_os == "Darwin": # macOS
+            try:
+                subprocess.run(["screencapture", "-x", temp_path], check=True)
+                if os.path.exists(temp_path) and os.path.getsize(temp_path) > 0:
+                    with open(temp_path, "rb") as f: return f.read()
+            except Exception as e:
+                logger.debug(f"macOS screencapture failed: {e}")
 
-        return (
-            "❌ Gagal mengambil screenshot.\n\n"
-            "Sistem Anda menggunakan **Wayland** (bukan X11) dan memblokir akses tangkapan layar dari aplikasi latar belakang (seperti VS Code Terminal).\n\n"
-            "**Solusi**:\n"
-            "1. Jalankan aplikasi menggunakan terminal sistem bawaan (bukan terminal VS Code) dengan perintah `npm start`.\n"
-            "2. Atau, beralih ke sesi **Xorg/X11** saat masuk login Ubuntu jika ingin dukungan kendali jarak jauh penuh."
-        )
+        # Universal Fallback: MSS (Multi-platform)
+        try:
+            import mss
+            import mss.tools
+            with mss.mss() as sct:
+                img = sct.grab(sct.monitors[0])
+                return mss.tools.to_png(img.rgb, img.size)
+        except: pass
+
+        return "❌ Gagal mengambil screenshot pada platform ini."
+
     finally:
+        # Restore Linux settings if needed
+        if current_os == "Linux":
+            subprocess.run(["gsettings", "set", "org.gnome.desktop.interface", "enable-animations", "true"], capture_output=True)
+        
         if os.path.exists(temp_path):
-            os.remove(temp_path)
+            try: os.remove(temp_path)
+            except: pass
+
+if __name__ == "__main__":
+    res = take_screenshot()
+    if isinstance(res, bytes):
+        print(f"Success! Captured {len(res)} bytes.")
+    else:
+        print(res)

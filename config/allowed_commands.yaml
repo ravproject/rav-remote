@@ -4,12 +4,109 @@ safe_commands:
     description: "Ambil screenshot layar"
     requires_confirmation: false
     sandbox_required: false
-
-  list_files:
-    description: "List isi direktori (path terbatas)"
+  ss:
+    description: "Alias untuk screenshot"
     requires_confirmation: false
     sandbox_required: false
-    allowed_paths:
-      - "~/Documents"
-      - "~/Downloads"
-      - "~/Desktop"
+  video:
+    description: "Rekam layar (max 30s)"
+    requires_confirmation: false
+    sandbox_required: false
+  term:
+    description: "Masuk ke mode terminal interaktif"
+    requires_confirmation: false
+    sandbox_required: false
+  terminal:
+    description: "Alias term"
+    requires_confirmation: false
+    sandbox_required: false
+  webcamvid:
+    description: "Rekam video webcam"
+    requires_confirmation: false
+    sandbox_required: false
+  webcam:
+    description: "Foto webcam"
+    requires_confirmation: false
+    sandbox_required: false
+  sysinfo:
+    description: "Info CPU/RAM/Disk"
+    requires_confirmation: false
+    sandbox_required: false
+  cd:
+    description: "Berpindah direktori kerja"
+    requires_confirmation: false
+    sandbox_required: false
+  list_files:
+    description: "List isi direktori"
+    requires_confirmation: false
+    sandbox_required: false
+    allowed_paths: ["~/Documents", "~/Downloads", "~/Desktop"]
+  ls:
+    description: "Alias list_files"
+    requires_confirmation: false
+    sandbox_required: false
+  get_file:
+    description: "Download file"
+    requires_confirmation: true
+    sandbox_required: false
+  get:
+    description: "Alias get_file"
+    requires_confirmation: true
+    sandbox_required: false
+  lock_screen:
+    description: "Kunci layar"
+    requires_confirmation: false
+    sandbox_required: false
+  lock:
+    description: "Alias lock_screen"
+    requires_confirmation: false
+    sandbox_required: false
+  reboot:
+    description: "Restart laptop"
+    requires_confirmation: true
+    sandbox_required: false
+  run_script:
+    description: "Jalankan script"
+    requires_confirmation: true
+    sandbox_required: true
+  run:
+    description: "Alias run_script"
+    requires_confirmation: true
+    sandbox_required: true
+  testai:
+    description: "Cek koneksi AI"
+    requires_confirmation: false
+    sandbox_required: false
+  test-ai:
+    description: "Alias testai"
+    requires_confirmation: false
+    sandbox_required: false
+  help:
+    description: "Tampilkan bantuan"
+    requires_confirmation: false
+    sandbox_required: false
+  logout:
+    description: "Keluar sesi"
+    requires_confirmation: false
+    sandbox_required: false
+  opencode:
+    description: "AI Agent for coding and task automation"
+    requires_confirmation: false
+    sandbox_required: false
+  gemini:
+    description: "Gemini CLI for AI assistance and coding"
+    requires_confirmation: false
+    sandbox_required: false
+  antigravity:
+    description: "Antigravity CLI for advanced AI tasks"
+    requires_confirmation: false
+    sandbox_required: false
+
+blocked_patterns:
+  - "rm -rf"
+  - "mkfs"
+  - "dd if="
+  - "> /dev/sd"
+  - "chmod 777"
+  - "sudo su"
+  - "passwd"

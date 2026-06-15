@@ -1,65 +1,116 @@
 """
-Module for recording live screen stream.
+LOCKED ARCHITECTURE — Cross-Platform Video Recorder.
+Automatically detects OS and uses the most robust/silent method.
 """
-import mss
-import imageio
+import subprocess
 import tempfile
-import time
 import os
+import time
+import platform
 from loguru import logger
 from typing import Optional
 
-def record_video(duration: int = 5) -> Optional[bytes]:
+def record_video(duration: int = 5) -> Optional[dict]:
     """
-    Record screen for `duration` seconds and return MP4 bytes.
-    Uses imageio which automatically fetches ffmpeg binary if needed.
+    Record screen across platforms (Windows, Linux, macOS).
+    Stability-first and Zero-flash.
     """
+    current_os = platform.system()
+    temp_mp4 = os.path.join(tempfile.gettempdir(), f"screen_{int(time.time())}.mp4")
+    
     try:
-        if "DISPLAY" not in os.environ:
-            os.environ["DISPLAY"] = ":0"
+        logger.info(f"Starting {current_os} Record ({duration}s)...")
         
-        if "XAUTHORITY" not in os.environ:
-            home = os.path.expanduser("~")
-            xauth = os.path.join(home, ".Xauthority")
-            if os.path.exists(xauth):
-                os.environ["XAUTHORITY"] = xauth
+        if current_os == "Linux":
+            # Optimized Linux Hybrid Capture (proven zero-flash)
+            return _record_linux(duration, temp_mp4)
             
-        temp_file = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False)
-        temp_path = temp_file.name
-        temp_file.close()
-
-        with mss.mss() as sct:
-            monitor = sct.monitors[1]
-            fps = 10 # Lower FPS for smaller file size
+        elif current_os == "Windows":
+            # Windows direct capture using FFmpeg gdigrab
+            return _record_windows(duration, temp_mp4)
             
-            # Using imageio to write mp4
-            writer = imageio.get_writer(temp_path, fps=fps, macro_block_size=None)
+        elif current_os == "Darwin": # macOS
+            # macOS capture using avfoundation
+            return _record_macos(duration, temp_mp4)
             
-            start_time = time.time()
-            while time.time() - start_time < duration:
-                # Capture screen
-                img = sct.grab(monitor)
-                # Convert to format suitable for imageio (RGB)
-                # MSS gives BGRA, we need RGB
-                frame = imageio.core.util.Image(img.rgb)
-                writer.append_data(frame)
-                
-                # Sleep to maintain rough FPS
-                time.sleep(1 / fps)
-                
-            writer.close()
-
-        with open(temp_path, "rb") as f:
-            video_bytes = f.read()
-            
-        os.remove(temp_path)
-        return video_bytes
-        
-    except Exception as e:
-        logger.error(f"Video recording failed: {e}")
-        if os.path.exists(temp_path):
-            try:
-                os.remove(temp_path)
-            except:
-                pass
         return None
+
+    except Exception as e:
+        logger.error(f"Recording failed on {current_os}: {e}")
+        return None
+    finally:
+        if os.path.exists(temp_mp4):
+            try: os.remove(temp_mp4)
+            except: pass
+
+def _record_linux(duration, temp_mp4):
+    """Linux Hybrid High-FPS capture (The proven method)."""
+    frames_dir = tempfile.TemporaryDirectory()
+    try:
+        subprocess.run(["gsettings", "set", "org.gnome.desktop.interface", "enable-animations", "false"], capture_output=True)
+        fps = 6
+        total_frames = int(duration * fps)
+        interval = 1.0 / fps
+        start_time = time.time()
+        
+        for i in range(total_frames):
+            frame_path = os.path.join(frames_dir.name, f"frame_{i:04d}.png")
+            res = subprocess.run(["flameshot", "full", "--raw"], capture_output=True, timeout=3)
+            if res.returncode == 0:
+                with open(frame_path, "wb") as f: f.write(res.stdout)
+            
+            elapsed = time.time() - start_time
+            expected = (i + 1) * interval
+            if expected > elapsed: time.sleep(expected - elapsed)
+
+        merge_cmd = [
+            "ffmpeg", "-y", "-framerate", str(fps), "-i", os.path.join(frames_dir.name, "frame_%04d.png"),
+            "-vf", "scale=1280:720,format=yuv420p", "-c:v", "libx264", "-profile:v", "main",
+            "-level", "4.0", "-preset", "ultrafast", "-crf", "24", "-movflags", "+faststart", temp_mp4
+        ]
+        subprocess.run(merge_cmd, capture_output=True)
+        return _finalize_video_dict(temp_mp4)
+    finally:
+        subprocess.run(["gsettings", "set", "org.gnome.desktop.interface", "enable-animations", "true"], capture_output=True)
+        frames_dir.cleanup()
+
+def _record_windows(duration, temp_mp4):
+    """Windows capture using gdigrab."""
+    cmd = [
+        "ffmpeg", "-y", "-f", "gdigrab", "-framerate", "15", "-i", "desktop",
+        "-t", str(duration), "-vf", "scale=1280:720,format=yuv420p",
+        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
+        "-movflags", "+faststart", temp_mp4
+    ]
+    subprocess.run(cmd, capture_output=True)
+    return _finalize_video_dict(temp_mp4)
+
+def _record_macos(duration, temp_mp4):
+    """macOS capture using avfoundation."""
+    cmd = [
+        "ffmpeg", "-y", "-f", "avfoundation", "-framerate", "15", "-i", "1",
+        "-t", str(duration), "-vf", "scale=1280:720,format=yuv420p",
+        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
+        "-movflags", "+faststart", temp_mp4
+    ]
+    subprocess.run(cmd, capture_output=True)
+    return _finalize_video_dict(temp_mp4)
+
+def _finalize_video_dict(path):
+    if os.path.exists(path) and os.path.getsize(path) > 1000:
+        with open(path, "rb") as f:
+            data = f.read()
+        return {
+            "type": "video",
+            "data": data,
+            "filename": f"screen_{int(time.time())}.mp4",
+            "mimetype": "video/mp4"
+        }
+    return None
+
+if __name__ == "__main__":
+    res = record_video(3)
+    if res:
+        print(f"Success! Captured {len(res['data'])} bytes.")
+    else:
+        print("Failed to record video.")

@@ -41,11 +41,9 @@ class CommandRouter:
             elif command_name == "video":
                 duration = 5
                 if args and args[0].isdigit():
-                    duration = min(int(args[0]), 15) # Max 15s
+                    duration = min(int(args[0]), 30) # Max 30s for smoothness
                 res = await self.handler.handle_video(duration)
                 self.auditor.log_event(user_id, "VIDEO", f"duration={duration}")
-                if isinstance(res, bytes):
-                    return {"type": "video", "data": res}
                 return res or "❌ Gagal merekam video."
 
             elif command_name == "webcam":
@@ -55,10 +53,25 @@ class CommandRouter:
                     return {"type": "photo", "data": res}
                 return res or "❌ Gagal mengambil foto webcam (kamera digunakan atau tidak ada)."
 
+            elif command_name == "webcamvid":
+                duration = int(args[0]) if args and args[0].isdigit() else 5
+                res = await self.handler.handle_webcam_video(duration)
+                self.auditor.log_event(user_id, "WEBCAM_VIDEO", f"duration={duration}")
+                if isinstance(res, bytes):
+                    return {"type": "video", "data": res}
+                return res or "❌ Gagal merekam video webcam."
+
             elif command_name == "sysinfo":
                 info = await self.handler.handle_sysinfo()
                 self.auditor.log_event(user_id, "SYSINFO", "")
                 return info
+
+            elif command_name == "cd":
+                if not args:
+                    return f"📂 Direktori saat ini: `{self.handler.get_cwd()}`"
+                result = self.handler.set_cwd(args[0])
+                self.auditor.log_event(user_id, "CD", args[0][:50])
+                return result
 
             elif command_name == "list_files":
                 path = args[0] if args else str(Path.home())
@@ -84,6 +97,15 @@ class CommandRouter:
                 confirmed = len(args) > 0 and args[0] == "confirm"
                 result = await self.handler.handle_reboot(confirmed)
                 self.auditor.log_event(user_id, "REBOOT", f"confirmed={confirmed}")
+                return result
+
+            elif command_name == "testai":
+                result = await self.handler.handle_test_ai()
+                return result
+
+            elif command_name in ["gemini", "antigravity", "opencode"]:
+                result = await self.handler.handle_ai_cli(command_name, args)
+                self.auditor.log_event(user_id, f"AI_CLI_{command_name.upper()}", " ".join(args)[:50])
                 return result
 
             elif command_name == "run_script":
@@ -115,15 +137,21 @@ HELP_TEXT = """
 
 *Perintah Tersedia:*
 `!screenshot` — Screenshot layar
-`!video <detik>` — Rekam layar (max 15s)
+`!video [detik]` — Rekam layar (max 30s)
 `!webcam` — Foto webcam
+`!webcamvid [detik]` — Rekam video webcam
+`!gemini [query]` — Perintah AI Gemini CLI
+`!antigravity [query]` — Perintah AI Antigravity CLI
+`!opencode [query]` — Perintah AI Opencode CLI
 `!sysinfo` — Info CPU/RAM/Disk
-`!ls <path>` — List isi folder
-`!get <file>` — Kirim file ke HP
+`!cd [path]` — Pindah folder kerja
+`!ls [path]` — List isi folder
+`!get [file]` — Kirim file ke HP
 `!term` — Mode Terminal Interaktif
 `!lock` — Kunci layar
 `!reboot` — Restart (butuh konfirmasi)
-`!run <script>` — Jalankan script aman
+`!run [script]` — Jalankan script aman
+`!testai` — Cek koneksi AI (NVIDIA NIM)
 `!logout` — Keluar dari sesi
 `!help` — Tampilkan bantuan ini
 
@@ -134,3 +162,4 @@ Ketik perintah natural language seperti:
 "Masuk ke mode terminal"
 "Kunci laptopku"
 """
+
