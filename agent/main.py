@@ -46,9 +46,35 @@ class OTPRequest(BaseModel):
     user_id: str
     otp: str
 
+import shutil
+import platform
+
+def check_system_dependencies():
+    """Environment Health Check: Memastikan system dependencies tersedia."""
+    missing = []
+    current_os = platform.system()
+    
+    if current_os == "Linux":
+        if not shutil.which("ffmpeg"):
+            missing.append("ffmpeg (Dibutuhkan untuk perekaman video)")
+        if not shutil.which("ydotool"):
+            missing.append("ydotool (Dibutuhkan untuk fitur !unlock paksa)")
+        if not shutil.which("wl-copy") and not shutil.which("xclip") and not shutil.which("xsel"):
+            missing.append("wl-clipboard atau xclip (Dibutuhkan untuk sinkronisasi clipboard !clip)")
+            
+    if missing:
+        logger.warning("⚠️ BEBERAPA DEPENDENSI SISTEM TIDAK DITEMUKAN:")
+        for m in missing:
+            logger.warning(f"  - {m}")
+        if current_os == "Linux":
+            logger.info("💡 Saran perbaikan: sudo apt-get install ffmpeg ydotool wl-clipboard xclip")
+    else:
+        logger.info("✅ Environment Health Check: Semua dependensi sistem terpenuhi.")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("🚀 Laptop Agent started")
+    logger.info("🚀 Laptop Agent starting...")
+    check_system_dependencies()
     yield
     logger.info("Laptop Agent shutdown")
 
