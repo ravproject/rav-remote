@@ -54,9 +54,14 @@ safe_commands:
     requires_confirmation: true
     sandbox_required: false
   lock_screen:
-    description: "Kunci layar"
+    description: "Kunci layar laptop"
     requires_confirmation: false
     sandbox_required: false
+  unlock:
+    description: "Buka kunci layar laptop"
+    requires_confirmation: true
+    sandbox_required: false
+
   lock:
     description: "Alias lock_screen"
     requires_confirmation: false
@@ -87,6 +92,38 @@ safe_commands:
     sandbox_required: false
   logout:
     description: "Keluar sesi"
+    requires_confirmation: false
+    sandbox_required: false
+  clip:
+    description: "Clipboard sync"
+    requires_confirmation: false
+    sandbox_required: false
+  open:
+    description: "Buka URL"
+    requires_confirmation: false
+    sandbox_required: false
+  top:
+    description: "Task manager"
+    requires_confirmation: false
+    sandbox_required: false
+  kill:
+    description: "Matikan proses"
+    requires_confirmation: false
+    sandbox_required: false
+  volume:
+    description: "Set volume"
+    requires_confirmation: false
+    sandbox_required: false
+  mute:
+    description: "Toggle mute"
+    requires_confirmation: false
+    sandbox_required: false
+  alarm:
+    description: "Bunyikan alarm"
+    requires_confirmation: false
+    sandbox_required: false
+  schedule:
+    description: "Jadwalkan tugas"
     requires_confirmation: false
     sandbox_required: false
   opencode:

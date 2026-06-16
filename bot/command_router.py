@@ -23,6 +23,8 @@ class CommandRouter:
                 return args[0].split(":", 1)[1]
             elif args and args[0].startswith("__NIM_BLOCKED__:"):
                 return "⚠️ Akses Ditolak: " + args[0].split(":", 1)[1]
+            elif args and args[0].startswith("__NIM_ERROR__:"):
+                return "🤖 AI Error: " + args[0].split(":", 1)[1]
             return "❓ Perintah tidak dikenali. Ketik `!help` untuk bantuan."
 
         # Whitelist validation
@@ -93,6 +95,13 @@ class CommandRouter:
                 self.auditor.log_event(user_id, "LOCK_SCREEN", "")
                 return result
 
+            elif command_name == "unlock":
+                password = args[0] if args else None
+                result = await self.handler.handle_unlock_screen(password)
+                # Password will be masked in audit logger separately
+                self.auditor.log_event(user_id, "UNLOCK", "")
+                return result
+
             elif command_name == "reboot":
                 confirmed = len(args) > 0 and args[0] == "confirm"
                 result = await self.handler.handle_reboot(confirmed)
@@ -102,6 +111,43 @@ class CommandRouter:
             elif command_name == "testai":
                 result = await self.handler.handle_test_ai()
                 return result
+
+            elif command_name == "clip":
+                if args and args[0] == "read":
+                    result = await self.handler.handle_clip_read()
+                elif args and args[0] == "write":
+                    result = await self.handler.handle_clip_write(" ".join(args[1:]))
+                else:
+                    return "❌ Gunakan: !clip read atau !clip write <teks>"
+                self.auditor.log_event(user_id, "CLIPBOARD", "")
+                return result
+
+            elif command_name == "open":
+                if not args: return "❌ Gunakan: !open <url>"
+                result = await self.handler.handle_open_url(args[0])
+                self.auditor.log_event(user_id, "OPEN_URL", args[0][:50])
+                return result
+
+            elif command_name == "top":
+                result = await self.handler.handle_top()
+                self.auditor.log_event(user_id, "TOP", "")
+                return result
+
+            elif command_name == "kill":
+                if not args or not args[0].isdigit(): return "❌ Gunakan: !kill <pid>"
+                result = await self.handler.handle_kill(int(args[0]))
+                self.auditor.log_event(user_id, "KILL", args[0])
+                return result
+
+            elif command_name in ["volume", "mute", "alarm"]:
+                value = args[0] if args else None
+                result = await self.handler.handle_audio_control(command_name, value)
+                self.auditor.log_event(user_id, f"AUDIO_{command_name.upper()}", str(value))
+                return result
+
+            elif command_name == "schedule":
+                # Schedule is intercepted by the bot handler, but if it reaches here, it means syntax was wrong or it's a fallback.
+                return "ℹ️ Format jadwal: `!schedule in <waktu> <perintah>`. Contoh: `!schedule in 30m !lock`"
 
             elif command_name in ["gemini", "antigravity", "opencode"]:
                 result = await self.handler.handle_ai_cli(command_name, args)
@@ -149,6 +195,7 @@ HELP_TEXT = """
 `!get [file]` — Kirim file ke HP
 `!term` — Mode Terminal Interaktif
 `!lock` — Kunci layar
+`!unlock` — Buka kunci layar
 `!reboot` — Restart (butuh konfirmasi)
 `!run [script]` — Jalankan script aman
 `!testai` — Cek koneksi AI (NVIDIA NIM)

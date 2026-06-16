@@ -23,7 +23,7 @@ NIM_MODEL = os.environ.get("NVIDIA_NIM_MODEL", "meta/llama-3.1-70b-instruct")
 AI_ENABLED = os.environ.get("AI_MODE_ENABLED", "true").lower() == "true"
 
 # Timeout untuk API call (LLM might be slow)
-API_TIMEOUT = 30.0
+API_TIMEOUT = 45.0
 
 class NIMClient:
 
@@ -55,14 +55,17 @@ class NIMClient:
                 # 3. Update history (Assistant response)
                 self.history.append({"role": "assistant", "content": ai_response})
                 
-                # 4. Sliding window: simpan hanya 10 pesan terakhir (5 turns)
                 if len(self.history) > 10:
                     self.history = self.history[-10:]
                     
             return ai_response
+        except httpx.TimeoutException:
+            logger.warning("NIM API Timeout")
+            return "__NIM_ERROR__:Timeout API NVIDIA NIM. Gunakan perintah manual (misal: !unlock)."
         except Exception as e:
-            logger.error(f"NIM contextual error: {e}")
-            return None
+            import traceback
+            logger.error(f"NIM contextual error:\n{traceback.format_exc()}")
+            return "__NIM_ERROR__:Gangguan koneksi ke AI. Gunakan perintah manual."
 
     async def _call_nim_api(self) -> Optional[str]:
         """Panggil NVIDIA NIM API dengan konteks history dan OS awareness."""
@@ -95,9 +98,17 @@ class NIMClient:
         data = response.json()
         raw_output = data["choices"][0]["message"]["content"].strip()
         
+        # 1. Robust JSON Extraction (Handle markdown blocks)
+        json_content = raw_output
+        if "```" in raw_output:
+            # Extract content between ```json and ``` or just ```
+            match = re.search(r"```(?:json)?\s*(.*?)\s*```", raw_output, re.DOTALL)
+            if match:
+                json_content = match.group(1)
+        
         # Parse JSON response
         try:
-            parsed = json.loads(raw_output)
+            parsed = json.loads(json_content)
             command = parsed.get("command", "UNKNOWN")
             reason = parsed.get("reason", "")
 
@@ -113,19 +124,20 @@ class NIMClient:
 
     def _validate_ai_output(self, command: str) -> bool:
         """Validasi output AI untuk fitur terbaru."""
-        valid_commands = {
-            "!screenshot", "!sysinfo", "!lock", "!reboot", "!term", "!exit", "!help", "!video", "!webcam", "!webcamvid"
-        }
-        valid_prefixes = ("!ls ", "!get ", "!run ", "!video ", "!cd ", "!gemini ", "!opencode ", "!antigravity ")
-
-        if command in valid_commands:
+        # Gunakan keys dari FallbackParser untuk validasi otomatis
+        from .fallback_parser import FallbackParser
+        valid_keys = set(FallbackParser.COMMAND_MAP.keys())
+        
+        # Ekstrak part pertama untuk dicek di valid_keys (misal !ls)
+        cmd_part = command.split(" ", 1)[0].lower()
+        
+        if cmd_part in valid_keys:
+            # Cek argumen berbahaya untuk perintah ber-argumen
+            if " " in command:
+                arg = command.split(" ", 1)[1]
+                dangerous_chars = set(";&|`$\x00")
+                return not any(c in arg for c in dangerous_chars)
             return True
-
-        if any(command.startswith(p) for p in valid_prefixes):
-            # Cek argumen berbahaya
-            arg = command.split(" ", 1)[1] if " " in command else ""
-            dangerous_chars = set(";&|`$\x00")
-            return not any(c in arg for c in dangerous_chars)
 
         return False
 

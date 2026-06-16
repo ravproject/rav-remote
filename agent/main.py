@@ -68,12 +68,13 @@ async def verify_api_key(x_api_key: str = Header(...)):
 async def heartbeat(_=Depends(verify_api_key)):
     """Heartbeat endpoint for Bot polling (Scenario C/VPN)."""
     metrics = sys_monitor.get_metrics()
-    # Check for anomalies
+    # Check for anomalies and battery
     anomalies = watchdog.check_system_anomalies(metrics["cpu"], metrics["ram"])
+    battery = battery_monitor.get_alerts()
     return {
         "status": "ONLINE",
         "metrics": metrics,
-        "alerts": anomalies
+        "alerts": anomalies + battery
     }
 
 @app.get("/system/alerts")

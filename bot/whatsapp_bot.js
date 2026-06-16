@@ -115,8 +115,37 @@ async function connectWhatsApp() {
       processedText = text.replace("opencode ", "opencode --dangerously-skip-permissions ");
     }
 
-    // Forward ke agent
     const jid = msg.key.remoteJid;
+
+    if (text.startsWith("!schedule ")) {
+      try {
+        const parts = text.split(" ", 4); // ['!schedule', 'in', '30m', '!lock']
+        if (parts[1] === "in") {
+          const timeStr = parts[2];
+          const commandToRun = text.substring(text.indexOf(parts[3])); // Get everything after timeStr
+          
+          const unit = timeStr.slice(-1);
+          const value = parseInt(timeStr.slice(0, -1));
+          const multiplier = unit === "s" ? 1000 : (unit === "m" ? 60000 : (unit === "h" ? 3600000 : 1000));
+          const sleepMs = value * multiplier;
+          
+          setTimeout(async () => {
+            // Fake message text and re-trigger by calling the listener logic? 
+            // We can just recursively call the whole function by modifying msg.message.conversation
+            msg.message = { conversation: commandToRun };
+            sock.ev.emit("messages.upsert", { messages: [msg], type: "notify" });
+          }, sleepMs);
+          
+          await sock.sendMessage(jid, { text: `✅ Perintah \`${commandToRun}\` dijadwalkan berjalan dalam ${timeStr}.` });
+          return;
+        }
+      } catch (e) {
+        await sock.sendMessage(jid, { text: "❌ Format salah. Gunakan: `!schedule in 30m !lock`" });
+        return;
+      }
+    }
+
+    // Forward ke agent
     await sock.sendPresenceUpdate("composing", jid);
     const processingMsg = await sock.sendMessage(jid, { text: "⏳ *Agent* sedang memproses..." });
 

@@ -238,5 +238,33 @@ class TestE2E(unittest.IsolatedAsyncioTestCase):
                 headers=unittest.mock.ANY
             )
 
+    async def test_ultimate_expansion_features(self):
+        """Test routing for the new ultimate expansion features."""
+        uid_str = str(self.user_id)
+        tg_bot._user_sessions[uid_str] = AuthManager.generate_session_token(uid_str)
+        tg_bot._terminal_mode[uid_str] = False # Reset terminal mode
+        _user_command_times.clear() # Clear rate limits
+        context = self.create_mock_context()
+
+        # 1. Test Clipboard
+        update = self.create_mock_update("!clip write hello")
+        with patch('bot.telegram_bot.httpx.AsyncClient.post', new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = MagicMock(status_code=200, json=lambda: {"type": "text", "content": "✅ Disalin"})
+            await message_handler(update, context)
+            self.assertIn("Disalin", update.message.reply_text.call_args[0][0])
+
+        # 2. Test Top
+        update = self.create_mock_update("!top")
+        with patch('bot.telegram_bot.httpx.AsyncClient.post', new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = MagicMock(status_code=200, json=lambda: {"type": "text", "content": "🔪 Top Processes"})
+            await message_handler(update, context)
+            self.assertIn("Top Processes", update.message.reply_text.call_args[0][0])
+
+        # 3. Test Schedule (bot layer parsing)
+        update = self.create_mock_update("!schedule in 1s !top")
+        await message_handler(update, context)
+        # Should confirm scheduling immediately
+        self.assertIn("dijadwalkan berjalan dalam 1s", update.message.reply_text.call_args[0][0])
+
 if __name__ == '__main__':
     unittest.main()

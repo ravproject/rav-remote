@@ -346,6 +346,32 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text(f"❌ Error writing to terminal: {e}")
         return
 
+    if message_text.startswith("!schedule "):
+        try:
+            parts = message_text.split(" ", 3)
+            if parts[1] == "in":
+                time_str = parts[2]
+                command_to_run = parts[3]
+                
+                # Parse time
+                unit = time_str[-1]
+                value = int(time_str[:-1])
+                multiplier = {"s": 1, "m": 60, "h": 3600}.get(unit, 1)
+                sleep_seconds = value * multiplier
+                
+                async def scheduled_task(delay, cmd):
+                    await asyncio.sleep(delay)
+                    # Fake update text and recurse
+                    update.message.text = cmd
+                    await message_handler(update, context)
+                
+                asyncio.create_task(scheduled_task(sleep_seconds, command_to_run))
+                await update.message.reply_text(f"✅ Perintah `{command_to_run}` dijadwalkan berjalan dalam {time_str}.")
+                return
+        except Exception as e:
+            await update.message.reply_text("❌ Format salah. Gunakan: `!schedule in 30m !lock`")
+            return
+
     if not AuthManager.check_rate_limit(user_id):
         await update.message.reply_text("⚠️ Terlalu banyak perintah.")
         return
