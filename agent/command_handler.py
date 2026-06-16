@@ -188,11 +188,7 @@ class CommandHandler:
             time.sleep(2) # Tunggu daemon siap
 
             # 4. Bangunkan layar (Escape dari blank screen)
-            # loginctl unlock-sessions bisa memakan waktu 25s dan gagal untuk background session
-            # jadi kita jalankan di background (Popen) agar tidak memblokir pengetikan
-            subprocess.Popen(["loginctl", "unlock-sessions"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            
-            # Tekan ESC untuk memunculkan prompt password
+            # Menggunakan ydotool untuk menekan ESC memunculkan prompt password
             subprocess.run(f"echo '{password}' | sudo -S ydotool key 1:1 1:0", shell=True, capture_output=True, timeout=5)
             time.sleep(1)
 
