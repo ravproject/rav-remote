@@ -6,6 +6,7 @@ import os
 import subprocess
 import platform
 import asyncio
+import time
 from pathlib import Path
 from typing import Optional
 from loguru import logger
@@ -122,25 +123,94 @@ class CommandHandler:
         return await run_script(script_name, user_id)
 
     async def handle_lock_screen(self) -> str:
-        """Kunci layar laptop."""
-        system = platform.system()
-        if system == "Linux":
-            # Coba beberapa window manager
-            for cmd in ["loginctl lock-session", "xdg-screensaver lock", "gnome-screensaver-command -l"]:
-                try:
-                    subprocess.run(cmd.split(), timeout=5, check=True)
-                    return "🔒 Layar dikunci."
-                except (subprocess.CalledProcessError, FileNotFoundError):
-                    continue
-        elif system == "Darwin":  # macOS
-            subprocess.run(["pmset", "displaysleepnow"])
-            return "🔒 Layar dikunci."
-        elif system == "Windows":
-            import ctypes
-            ctypes.windll.user32.LockWorkStation()
-            return "🔒 Layar dikunci."
+        """Kunci layar laptop (Cross-Platform)."""
+        current_os = platform.system()
+        try:
+            if current_os == "Linux":
+                # Coba beberapa window manager
+                for cmd in ["loginctl lock-session", "xdg-screensaver lock", "gnome-screensaver-command -l"]:
+                    try:
+                        subprocess.run(cmd.split(), timeout=5, check=True)
+                        return f"🔒 Layar {current_os} berhasil dikunci."
+                    except (subprocess.CalledProcessError, FileNotFoundError):
+                        continue
+            elif current_os == "Windows":
+                import ctypes
+                ctypes.windll.user32.LockWorkStation()
+                return f"🔒 Layar {current_os} berhasil dikunci."
+            elif current_os == "Darwin": # macOS
+                subprocess.run(["pmset", "displaysleepnow"], capture_output=True)
+                return f"🔒 Layar {current_os} berhasil dikunci."
+            
+            return f"❌ Fitur lock belum didukung untuk OS: {current_os}"
+        except Exception as e:
+            return f"❌ Gagal mengunci layar: {str(e)}"
 
-        return "❌ Gagal mengunci layar."
+    async def handle_unlock_screen(self, password: Optional[str] = None) -> str:
+        """Buka kunci layar laptop (Cross-Platform) dengan Force Unlock (Keystroke Simulation)."""
+        current_os = platform.system()
+        
+        if current_os != "Linux":
+            if current_os == "Windows":
+                return "⚠️ Windows memblokir remote unlock demi keamanan. Anda harus melakukannya secara fisik atau via RDP."
+            elif current_os == "Darwin":
+                subprocess.run(["caffeinate", "-u", "-t", "1"], capture_output=True)
+                return "🔓 Layar macOS dibangunkan. Jika terkunci, fitur input password belum didukung."
+            return f"❌ Fitur unlock belum didukung untuk OS: {current_os}"
+
+        if not password:
+            # Coba metode standar dulu jika tanpa password (Non-blocking enough)
+            subprocess.run(["loginctl", "unlock-sessions"], capture_output=True)
+            return "🔓 Perintah buka kunci terkirim (tanpa password). Jika layar masih meminta password, gunakan: `!unlock <password_laptop>`"
+
+        # Offload heavy/blocking subprocess operations to a thread to prevent Agent hang
+        return await asyncio.to_thread(self._force_unlock_linux_sync, password)
+
+    def _force_unlock_linux_sync(self, password: str) -> str:
+        """Synchronous forceful unlock logic isolated to prevent event loop blocking."""
+        try:
+            # 1. Cek apakah ydotool terinstall
+            res_check = subprocess.run(["which", "ydotool"], capture_output=True, text=True)
+            if res_check.returncode != 0:
+                # Install ydotool tanpa apt-get update agar cepat
+                install_cmd = f"echo '{password}' | sudo -S apt-get install -y ydotool"
+                res_install = subprocess.run(install_cmd, shell=True, capture_output=True, text=True, timeout=30)
+                if res_install.returncode != 0:
+                    return f"❌ Gagal menginstall ydotool (Password sudo mungkin salah atau butuh update manual).\nDetail: {res_install.stderr}"
+
+            # 2. Matikan daemon lama jika ada
+            subprocess.run(f"echo '{password}' | sudo -S pkill ydotoold", shell=True, capture_output=True, timeout=5)
+            
+            # 3. Jalankan daemon ydotool
+            # SANGAT PENTING: Gunakan Popen dan DEVNULL agar Python tidak menunggu output pipe daemon
+            daemon_cmd = f"echo '{password}' | sudo -S ydotoold"
+            subprocess.Popen(daemon_cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            time.sleep(2) # Tunggu daemon siap
+
+            # 4. Bangunkan layar (Escape dari blank screen)
+            # loginctl unlock-sessions bisa memakan waktu 25s dan gagal untuk background session
+            # jadi kita jalankan di background (Popen) agar tidak memblokir pengetikan
+            subprocess.Popen(["loginctl", "unlock-sessions"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            
+            # Tekan ESC untuk memunculkan prompt password
+            subprocess.run(f"echo '{password}' | sudo -S ydotool key 1:1 1:0", shell=True, capture_output=True, timeout=5)
+            time.sleep(1)
+
+            # 5. Ketik password dan Enter
+            type_cmd = ["sudo", "-S", "ydotool", "type", password]
+            proc = subprocess.Popen(type_cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            proc.communicate(input=f"{password}\n".encode(), timeout=10)
+            
+            time.sleep(0.5)
+            # Tekan Enter (Keycode 28)
+            subprocess.run(f"echo '{password}' | sudo -S ydotool key 28:1 28:0", shell=True, capture_output=True, timeout=5)
+
+            return "🔓 Force Unlock berhasil dieksekusi! Layar seharusnya sudah terbuka."
+        
+        except subprocess.TimeoutExpired:
+            return "⏳ Waktu Habis: Proses instalasi atau eksekusi sistem memakan waktu terlalu lama."
+        except Exception as e:
+            return f"❌ Gagal mengeksekusi force unlock: {str(e)}"
 
     async def handle_reboot(self, confirmed: bool = False) -> str:
         """Restart laptop — butuh konfirmasi (Cross-Platform)."""
