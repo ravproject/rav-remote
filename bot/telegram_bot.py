@@ -227,9 +227,9 @@ async def poll_terminal(user_id: str, context: ContextTypes.DEFAULT_TYPE, chat_i
     if accumulated_output:
         await context.bot.send_message(chat_id=chat_id, text=f"<code>{accumulated_output}</code>", parse_mode="HTML")
 
-async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, override_text: str = None):
     user_id = str(update.effective_user.id)
-    message_text = update.message.text.strip() if update.message.text else ""
+    message_text = override_text if override_text is not None else (update.message.text.strip() if update.message.text else "")
 
     token = _user_sessions.get(user_id)
     if not token:
@@ -361,9 +361,8 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 async def scheduled_task(delay, cmd):
                     await asyncio.sleep(delay)
-                    # Fake update text and recurse
-                    update.message.text = cmd
-                    await message_handler(update, context)
+                    # Use override_text to avoid mutating immutable Update object
+                    await message_handler(update, context, override_text=cmd)
                 
                 asyncio.create_task(scheduled_task(sleep_seconds, command_to_run))
                 await update.message.reply_text(f"✅ Perintah `{command_to_run}` dijadwalkan berjalan dalam {time_str}.")
