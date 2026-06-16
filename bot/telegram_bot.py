@@ -26,6 +26,7 @@ from telegram.ext import (
     ContextTypes,
     ApplicationBuilder,
 )
+from telegram.error import TimedOut, NetworkError
 from loguru import logger
 from .auth import AuthManager
 from .command_router import CommandRouter
@@ -433,6 +434,15 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not AuthManager.is_user_allowed(user_id):
         await update.message.reply_text("❌ Akses ditolak.")
         return
+    
+    # DEV_MODE: Bypass OTP if enabled
+    if os.environ.get("DEV_MODE_ENABLED") == "true":
+        token = AuthManager.generate_session_token(user_id)
+        _user_sessions[user_id] = token
+        save_current_sessions()
+        await update.message.reply_text("🛠️ <b>DEV_MODE AKTIF:</b> Autentikasi bypass. Login berhasil!", parse_mode="HTML")
+        return
+
     await update.message.reply_text("🔐 <b>Autentikasi Diperlukan</b>\n<code>/otp &lt;kode&gt;</code>", parse_mode="HTML")
 
 async def otp_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -457,8 +467,19 @@ async def logout_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         AuthManager.revoke_token(token)
     await update.message.reply_text("👋 Logout berhasil.")
 
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Log Errors caused by Updates."""
+    if isinstance(context.error, TimedOut):
+        logger.warning("Telegram API TimedOut. Retrying internal loop...")
+    elif isinstance(context.error, NetworkError):
+        logger.warning(f"Network error: {context.error}. Bot will attempt to recover.")
+    else:
+        logger.error(f"Update {update} caused error {context.error}")
+
 if __name__ == "__main__":
-    app = ApplicationBuilder().token(BOT_TOKEN).post_init(post_init).build()
+    # Increased connect and read timeouts for unstable networks
+    app = ApplicationBuilder().token(BOT_TOKEN).post_init(post_init).connect_timeout(60).read_timeout(60).build()
+    app.add_error_handler(error_handler)
 
     app.add_handler(CommandHandler("start", start_handler))
     app.add_handler(CommandHandler("otp", otp_handler))
