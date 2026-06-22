@@ -187,17 +187,31 @@ class CommandHandler:
             return f"❌ Gagal mematikan proses: {e}"
 
     async def handle_audio_control(self, action: str, value: Optional[str] = None) -> str:
-        """Kontrol audio (volume, mute, alarm)."""
+        """Kontrol audio (volume app/global, mute, alarm, up/down)."""
         current_os = platform.system()
         try:
             if action == "volume":
-                vol = max(0, min(100, int(value or 50)))
+                if value and value.lower() in ("up", "naik"):
+                    if current_os == "Linux":
+                        subprocess.run(["amixer", "set", "Master", "5%+"], capture_output=True)
+                    return "🔊 Volume naik 5%"
+                if value and value.lower() in ("down", "turun"):
+                    if current_os == "Linux":
+                        subprocess.run(["amixer", "set", "Master", "5%-"], capture_output=True)
+                    return "🔊 Volume turun 5%"
+                if value and value.lower() in ("mute", "senyap"):
+                    if current_os == "Linux":
+                        subprocess.run(["amixer", "set", "Master", "toggle"], capture_output=True)
+                    return "🔇 Mute/unmute."
+                try:
+                    vol = max(0, min(100, int(value or 50)))
+                except ValueError:
+                    vol = 50
                 if current_os == "Linux":
                     subprocess.run(["amixer", "set", "Master", f"{vol}%"], capture_output=True)
                 elif current_os == "Darwin":
                     subprocess.run(["osascript", "-e", f"set volume output volume {vol}"], capture_output=True)
-                # Windows volume requires external libs, leaving as placeholder or partial
-                return f"🔊 Volume diatur ke {vol}%"
+                return f"🔊 Volume global diatur ke {vol}%"
                 
             elif action == "mute":
                 if current_os == "Linux":
@@ -525,10 +539,13 @@ class CommandHandler:
         except Exception as e:
             return f"❌ Gagal mengontrol media: {e}"
 
-    async def handle_battery(self) -> str:
+    async def handle_battery(self, args: list = None) -> str:
         """Membaca detail status dan kesehatan baterai laptop."""
         import os
         import glob
+        
+        if args and args[0].lower() == "health":
+            return await self._handle_battery_health()
         
         battery_dirs = glob.glob("/sys/class/power_supply/BAT*")
         ac_dirs = glob.glob("/sys/class/power_supply/AC*") + glob.glob("/sys/class/power_supply/ADP*")
@@ -593,6 +610,51 @@ class CommandHandler:
                 pass
                 
         return "\n".join([line for line in res if line])
+
+    async def _handle_battery_health(self) -> str:
+        import os, glob
+        battery_dirs = glob.glob("/sys/class/power_supply/BAT*")
+        if not battery_dirs:
+            return "❌ Sensor baterai tidak terdeteksi."
+        bat_dir = battery_dirs[0]
+        def r(f):
+            p = os.path.join(bat_dir, f)
+            return open(p).read().strip() if os.path.exists(p) else ""
+        cap = r("capacity")
+        cf = r("charge_full")
+        cfd = r("charge_full_design")
+        cycle = r("cycle_count")
+        model = r("model_name")
+        manufacturer = r("manufacturer")
+        health = "N/A"
+        if cf and cfd:
+            try:
+                pct = (int(cf) / int(cfd)) * 100
+                health = f"{pct:.1f}%"
+                if pct > 80:
+                    health += " (Baik)"
+                elif pct > 60:
+                    health += " (Cukup)"
+                else:
+                    health += " (Ganti segera)"
+            except Exception:
+                pass
+        lines = ["🔋 **Kesehatan Baterai**"]
+        if model: lines.append(f"▪️ Model: {model}")
+        if manufacturer: lines.append(f"▪️ Pabrikan: {manufacturer}")
+        if cap: lines.append(f"▪️ Kapasitas saat ini: {cap}%")
+        lines.append(f"▪️ Kesehatan: {health}")
+        if cycle: lines.append(f"▪️ Siklus: {cycle}")
+        if health != "N/A":
+            try:
+                pct = float(health.split("%")[0])
+                if pct < 60:
+                    lines.append("\n💡 Rekomendasi: Segera ganti baterai.")
+                elif pct < 80:
+                    lines.append("\n💡 Rekomendasi: Perhatikan pemakaian baterai.")
+            except (ValueError, IndexError):
+                pass
+        return "\n".join(lines)
 
     async def handle_notif(self, text: str) -> str:
         """Memunculkan pesan popup desktop notification langsung di layar laptop."""
@@ -1575,5 +1637,708 @@ class CommandHandler:
         else:
             return "❌ Argumen tidak valid. Gunakan `!guard on` atau `!guard off`."
 
+    # ── PHASE 2: AI & Automation Intelligence ─────────────────────────────────
+
+    async def handle_ai_work(self, args: list[str]) -> str:
+        from agent.ai_work import ai_work
+        if not args:
+            return "Gunakan: !ai work <perintah alami>. Contoh: !ai work buatkan jadwal harian"
+        return await ai_work(" ".join(args))
+
+    async def handle_ai_write(self, args: list[str]) -> str:
+        from agent.ai_work import ai_write
+        if not args:
+            return "Gunakan: !ai write <tipe> <topik>. Contoh: !ai write email follow up proposal"
+        doc_type = args[0]
+        topic = " ".join(args[1:]) if len(args) > 1 else doc_type
+        return await ai_write(doc_type, topic)
+
+    async def handle_ai_automate(self, args: list[str]) -> str:
+        from agent.ai_work import ai_automate
+        if not args:
+            return "Gunakan: !ai automate <deskripsi>. Contoh: !ai automate backup folder Documents setiap jam"
+        return await ai_automate(" ".join(args))
+
+    async def handle_ai_summarize(self, args: list[str]) -> str:
+        from agent.ai_work import ai_summarize
+        if not args:
+            return "Gunakan: !ai summarize <target>. Contoh: !ai summarize ~/Documents/Projects"
+        return await ai_summarize(" ".join(args))
+
+    async def handle_ai_research(self, args: list[str]) -> str:
+        from agent.ai_work import ai_research
+        if not args:
+            return "Gunakan: !ai research <topik> [depth]. Contoh: !ai research AI 2026 medium"
+        depth = "medium"
+        topic = " ".join(args)
+        if args[-1] in ("quick", "medium", "deep"):
+            depth = args[-1]
+            topic = " ".join(args[:-1])
+        return await ai_research(topic, depth)
+
+    async def handle_ai_insight(self, args: list[str]) -> str:
+        from agent.ai_work import ai_insight
+        period = "daily"
+        if args and args[0] in ("daily", "weekly", "monthly"):
+            period = args[0]
+        return await ai_insight(period)
+
+    async def handle_smart_clip(self, args: list[str]) -> str:
+        from agent.smart_clipboard import smart_clip
+        if not args:
+            status = "AKTIF" if smart_clip.active else "NONAKTIF"
+            return f"🧠 Smart Clipboard: {status}\nGunakan: !smart clipboard [on|off|history]"
+        subcmd = args[0].lower()
+        if subcmd in ("on", "start"):
+            return smart_clip.start()
+        elif subcmd in ("off", "stop"):
+            return smart_clip.stop()
+        elif subcmd in ("history", "hist"):
+            return smart_clip.show_history()
+        if subcmd == "clipboard" and len(args) > 1:
+            subcmd2 = args[1].lower()
+            if subcmd2 in ("on", "start"):
+                return smart_clip.start()
+            elif subcmd2 in ("off", "stop"):
+                return smart_clip.stop()
+            elif subcmd2 in ("history", "hist"):
+                return smart_clip.show_history()
+        return "Gunakan: !smart clipboard [on|off|history]"
+
+    async def handle_macro(self, args: list[str]) -> str:
+        from agent.macro import macro_manager
+        if not args:
+            return "Gunakan: !macro [record|play|save|list|delete] [nama]"
+        subcmd = args[0].lower()
+        if subcmd == "record" and len(args) > 1:
+            return macro_manager.record(args[1])
+        elif subcmd == "stop":
+            return macro_manager.stop()
+        elif subcmd == "save" and len(args) > 1:
+            return macro_manager.save(args[1])
+        elif subcmd == "play" and len(args) > 1:
+            return macro_manager.play(args[1])
+        elif subcmd == "list":
+            return macro_manager.list_macros()
+        elif subcmd in ("del", "delete") and len(args) > 1:
+            return macro_manager.delete(args[1])
+        return "Gunakan: !macro [record|play|save|list|delete] [nama]"
+
+    async def handle_schedule(self, args: list[str]) -> str:
+        from agent.scheduler import scheduler
+        if not args:
+            return scheduler.list_schedules()
+        subcmd = args[0].lower()
+        if subcmd == "add" and len(args) >= 3:
+            return scheduler.add(" ".join(args[1:-1]), args[-1])
+        elif subcmd == "list":
+            return scheduler.list_schedules()
+        elif subcmd in ("del", "delete") and len(args) > 1 and args[1].isdigit():
+            return scheduler.delete(int(args[1]))
+        return "Gunakan: !schedule add <perintah> <waktu/cron>. Contoh: !schedule add !focus on 25 08:00"
+
+    async def handle_voice_cmd(self, args: list[str]) -> str:
+        from agent.voice_cmd import voice_cmd_manager
+        if not args:
+            status = "AKTIF" if voice_cmd_manager.active else "NONAKTIF"
+            return f"🎤 Voice Command: {status}\nGunakan: !voice cmd [on|off]"
+        subcmd = args[0].lower()
+        if subcmd in ("on", "start"):
+            return voice_cmd_manager.start()
+        elif subcmd in ("off", "stop"):
+            return voice_cmd_manager.stop()
+        if subcmd == "cmd" and len(args) > 1:
+            subcmd2 = args[1].lower()
+            if subcmd2 in ("on", "start"):
+                return voice_cmd_manager.start()
+            elif subcmd2 in ("off", "stop"):
+                return voice_cmd_manager.stop()
+        return "Gunakan: !voice cmd [on|off]"
+
+    # ── PHASE 3: File, Sync & Data Management ────────────────────────────────
+
+    async def handle_sync(self, args: list[str]) -> str:
+        from agent.file_sync import sync_manager
+        if not args:
+            return "Gunakan: !sync <folder> [service]. Contoh: !sync ~/Documents gdrive"
+        folder = args[0]
+        service = args[1] if len(args) > 1 else "local"
+        return sync_manager.sync_folder(folder, service)
+
+    async def handle_quick(self, args: list[str]) -> str:
+        if not args:
+            return "Gunakan: !quick [upload|app] [args]"
+        subcmd = args[0].lower()
+        if subcmd in ("upload", "unggah"):
+            return await self.handle_quick_upload(args[1:])
+        elif subcmd in ("app", "aplikasi", "buka"):
+            return await self.handle_quick_app(args[1:])
+        return "Gunakan: !quick [upload|app] [args]. Contoh: !quick upload atau !quick app vscode"
+
+    async def handle_quick_upload(self, args: list[str]) -> str:
+        from agent.file_ops import quick_upload
+        return quick_upload()
+
+    async def handle_recent(self, args: list[str]) -> str:
+        from agent.file_ops import recent_files
+        item_type = "files"
+        count = 10
+        if args:
+            if args[0] in ("files", "folders"):
+                item_type = args[0]
+                count = int(args[1]) if len(args) > 1 and args[1].isdigit() else 10
+            elif args[0].isdigit():
+                count = int(args[0])
+        return recent_files(item_type, count)
+
+    async def handle_search_content(self, args: list[str]) -> str:
+        from agent.file_ops import search_content
+        if not args:
+            return "Gunakan: !search content <keyword> [folder]. Contoh: !search content budget ~/Documents"
+        start = 0
+        if args[0] == "content":
+            start = 1
+        remaining = args[start:]
+        if not remaining:
+            return "Gunakan: !search content <keyword> [folder]. Contoh: !search content budget ~/Documents"
+        keyword = remaining[0]
+        folder = remaining[1] if len(remaining) > 1 else None
+        return search_content(keyword, folder)
+
+    async def handle_convert(self, args: list[str]) -> str:
+        from agent.file_ops import convert_file
+        if len(args) < 2:
+            return "Gunakan: !convert <file> <format>. Contoh: !convert laporan.docx pdf"
+        return convert_file(args[0], args[1])
+
+    async def handle_backup(self, args: list[str]) -> str:
+        from agent.file_sync import SyncManager
+        from agent.file_ops import organize_folder
+        if not args:
+            return "Gunakan: !backup <folder> [quick|full]. Contoh: !backup ~/Documents full"
+        folder = args[0]
+        mode = args[1] if len(args) > 1 and args[1] in ("quick", "full") else "quick"
+        sm = SyncManager()
+        result = sm.sync_folder(folder, "local")
+        if mode == "full":
+            result += f"\n{organize_folder(folder, 'type')}"
+        return result
+
+    async def handle_organize(self, args: list[str]) -> str:
+        from agent.file_ops import organize_folder
+        if not args:
+            return "Gunakan: !organize <folder> [by type|date]. Contoh: !organize ~/Downloads by type"
+        folder = args[0]
+        method = "type"
+        if len(args) > 1:
+            if args[1] in ("type", "date"):
+                method = args[1]
+            elif args[1] == "by" and len(args) > 2:
+                method = "date" if "date" in args[2].lower() else "type"
+        return organize_folder(folder, method)
+
+    async def handle_file_watcher(self, args: list[str]) -> str:
+        from agent.file_watcher import file_watcher
+        if not args:
+            return file_watcher.get_changes()
+        start = 0
+        if args[0] == "watcher":
+            start = 1
+        remaining = args[start:]
+        if not remaining:
+            return file_watcher.get_changes()
+        subcmd = remaining[0].lower()
+        if subcmd in ("on", "start") and len(remaining) > 1:
+            return file_watcher.start(remaining[1])
+        elif subcmd in ("off", "stop") and len(remaining) > 1:
+            return file_watcher.stop(remaining[1])
+        elif subcmd in ("status", "changes"):
+            folder = remaining[1] if len(remaining) > 1 else None
+            return file_watcher.get_changes(folder)
+        return "Gunakan: !file watcher [on|off|status] <folder>"
+
+    async def handle_version(self, args: list[str]) -> str:
+        from agent.file_version import file_version_manager
+        if not args:
+            return "Gunakan: !version [status|commit|history|revert] [file]"
+        subcmd = args[0].lower()
+        if subcmd == "commit" and len(args) > 1:
+            return file_version_manager.commit(args[1])
+        elif subcmd == "history" and len(args) > 1:
+            return file_version_manager.history(args[1])
+        elif subcmd == "revert" and len(args) > 1:
+            ver = int(args[2]) if len(args) > 2 and args[2].isdigit() else None
+            return file_version_manager.revert(args[1], ver)
+        elif subcmd == "status":
+            filepath = args[1] if len(args) > 1 else None
+            return file_version_manager.status(filepath)
+        return "Gunakan: !version [commit|history|revert|status] <file> [versi]"
+
+    async def handle_clean(self, args: list[str]) -> str:
+        from agent.file_ops import clean_disk
+        scope = args[0] if args and args[0] in ("temp", "cache", "duplicates", "all") else "all"
+        return clean_disk(scope)
+
+    # ── PHASE 4: System Enhancement & Convenience ────────────────────────────
+
+    async def handle_volume_app(self, args: list[str]) -> str:
+        if not args:
+            return "Gunakan: !volume [app|global] [level|up|down|mute]. Contoh: !volume chrome 60"
+        cmd = args[0].lower()
+        if cmd in ("up", "naik"):
+            return await self.handle_audio_control("volume", "up")
+        if cmd in ("down", "turun"):
+            return await self.handle_audio_control("volume", "down")
+        if cmd in ("mute", "senyap"):
+            return await self.handle_audio_control("mute", None)
+        if cmd == "global" or len(args) < 2:
+            level = args[1] if len(args) > 1 else "50"
+            return await self.handle_audio_control("volume", level)
+        app = cmd
+        level = args[1] if len(args) > 1 else "50"
+        if app == "chrome" or app == "chromium":
+            try:
+                import pulsectl
+                with pulsectl.Pulse("rav-volume") as pulse:
+                    for sink_input in pulse.sink_input_list():
+                        if "chrome" in sink_input.proplist.get("application.process.binary", "").lower():
+                            vol = min(1.0, max(0.0, int(level) / 100.0))
+                            pulse.volume_set_all_chans(sink_input, vol)
+                            return f"🔊 Volume Chrome diatur ke {level}%"
+                return "Tidak ada audio Chrome yang sedang diputar."
+            except ImportError:
+                return "Fitur per-app volume membutuhkan pulsectl. Install: pip install pulsectl"
+        elif app in ("spotify", "firefox", "vlc", "brave", "discord"):
+            try:
+                import pulsectl
+                with pulsectl.Pulse("rav-volume") as pulse:
+                    for sink_input in pulse.sink_input_list():
+                        binary = sink_input.proplist.get("application.process.binary", "").lower()
+                        if app in binary:
+                            vol = min(1.0, max(0.0, int(level) / 100.0))
+                            pulse.volume_set_all_chans(sink_input, vol)
+                            return f"🔊 Volume {app.capitalize()} diatur ke {level}%"
+                    return f"Tidak ada audio {app.capitalize()} yang sedang diputar."
+            except ImportError:
+                return "Fitur per-app volume membutuhkan pulsectl."
+        return f"App '{app}' belum didukung untuk volume terpisah. Gunakan: !volume global {level}"
+
+    async def handle_power(self, args: list[str]) -> str:
+        from agent.power_manager import set_power_profile
+        profile = args[0] if args else "balanced"
+        return set_power_profile(profile)
+
+    async def handle_multi_monitor(self, args: list[str]) -> str:
+        from agent.multi_monitor import list_monitors, switch_monitor, arrange_monitors
+        if not args:
+            return list_monitors()
+        subcmd = args[0].lower()
+        if subcmd == "monitor" and len(args) > 1:
+            subcmd = args[1].lower()
+            args = args[1:]
+        if subcmd == "list":
+            return list_monitors()
+        elif subcmd == "switch":
+            target = args[1] if len(args) > 1 else "auto"
+            return switch_monitor(target)
+        elif subcmd in ("arrange", "layout"):
+            layout = args[1] if len(args) > 1 else "grid"
+            return arrange_monitors(layout)
+        return "Gunakan: !multi monitor [list|switch|arrange] [args]"
+
+    async def handle_sleep(self, args: list[str]) -> str:
+        from agent.sleep_wake import sleep_laptop
+        delay = args[0] if args else None
+        return sleep_laptop(delay)
+
+    async def handle_wake(self, args: list[str]) -> str:
+        from agent.sleep_wake import wake_laptop
+        if not args:
+            return "Gunakan: !wake <waktu>. Contoh: !wake 07:30"
+        return wake_laptop(args[0])
+
+    async def handle_quick_app(self, args: list[str]) -> str:
+        from agent.command_handler import CommandHandler
+        if not args:
+            return "Gunakan: !quick app <nama>. Contoh: !quick app notion atau !quick app vscode"
+        app_name = args[0]
+        return await self.handle_launch_app(app_name)
+
+    async def handle_night_mode(self, args: list[str]) -> str:
+        from agent.night_mode import night_mode_on, night_mode_off
+        if not args:
+            return "Gunakan: !night mode [on|off]"
+        subcmd = args[0].lower()
+        if subcmd == "mode" and len(args) > 1:
+            subcmd = args[1].lower()
+        if subcmd in ("on", "start", "1"):
+            return night_mode_on()
+        elif subcmd in ("off", "stop", "0"):
+            return night_mode_off()
+        return "Gunakan: !night mode [on|off]"
+
+    async def handle_window_arrange(self, args: list[str]) -> str:
+        from agent.window_manager import arrange_windows, snap_window, minimize_all, close_all
+        if not args:
+            return "Gunakan: !window [arrange|snap|minimize all|close all] [args]"
+        subcmd = args[0].lower()
+        if subcmd == "arrange":
+            layout = args[1] if len(args) > 1 else "cascade"
+            return arrange_windows(layout)
+        elif subcmd == "snap":
+            pos = args[1] if len(args) > 1 else "left"
+            return snap_window(pos)
+        elif subcmd in ("minimize", "minimizeall", "minimize all") or (subcmd == "all" and len(args) > 1 and args[1] == "minimize"):
+            return minimize_all()
+        elif subcmd in ("close", "closeall", "close all") or (subcmd == "all" and len(args) > 1 and args[1] == "close"):
+            return close_all()
+        return "Gunakan: !window [arrange|snap|minimize all|close all] [args]"
+
+    async def handle_hotkey(self, args: list[str]) -> str:
+        from agent.hotkey_manager import hotkey_manager
+        if not args:
+            return hotkey_manager.list_hotkeys()
+        subcmd = args[0].lower()
+        if subcmd == "create" and len(args) >= 3:
+            return hotkey_manager.create(args[1], " ".join(args[2:]))
+        elif subcmd == "list":
+            return hotkey_manager.list_hotkeys()
+        elif subcmd in ("del", "delete") and len(args) > 1:
+            return hotkey_manager.delete(args[1])
+        return "Gunakan: !hotkey [create|list|delete] [nama] [key]"
+
+    async def handle_launch_advanced(self, args: list[str]) -> str:
+        import subprocess
+        import shutil
+        if not args:
+            return "Gunakan: !launch advanced <app> [args]. Contoh: !launch advanced chrome --incognito"
+        app = args[0]
+        app_args = args[1:]
+        app_map = {
+            "chrome": ["google-chrome", "chrome", "chromium-browser"],
+            "firefox": ["firefox"],
+            "vscode": ["code"], "code": ["code"],
+        }
+        commands = app_map.get(app.lower(), [app])
+        cmd = None
+        for c in commands:
+            if shutil.which(c):
+                cmd = c
+                break
+        if not cmd:
+            return f"❌ Aplikasi '{app}' tidak ditemukan."
+        try:
+            full_cmd = [cmd] + app_args
+            subprocess.Popen(full_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            args_str = " ".join(app_args) if app_args else "(no args)"
+            return f"🚀 {app} diluncurkan dengan: {args_str}"
+        except Exception as e:
+            return f"❌ Gagal: {e}"
+
+    # ── PHASE 1: Core Productivity Features ──────────────────────────────────
+
+    async def handle_focus(self, args: list[str]) -> str:
+        """Focus mode — Pomodoro timer + block distractions."""
+        from agent.focus import focus_manager
+        if not args:
+            return focus_manager.get_remaining()
+        subcmd = args[0].lower()
+        if subcmd == "on":
+            minutes = int(args[1]) if len(args) > 1 and args[1].isdigit() else 25
+            return focus_manager.start(minutes)
+        elif subcmd == "off":
+            return focus_manager.stop()
+        return "Gunakan: !focus [on|off] [menit]"
+
+    async def handle_workspace(self, args: list[str]) -> str:
+        """Workspace manager — save/load desktop state."""
+        from agent.workspace import workspace_manager
+        if not args:
+            return "Gunakan: !workspace [save|load|list|delete] <nama>"
+        subcmd = args[0].lower()
+        ws_name = " ".join(args[1:]) if len(args) > 1 else "default"
+        if subcmd == "save":
+            return workspace_manager.save(ws_name)
+        elif subcmd == "load":
+            return workspace_manager.load(ws_name)
+        elif subcmd == "list":
+            return workspace_manager.list_workspaces()
+        elif subcmd in ("del", "delete"):
+            return workspace_manager.delete(ws_name)
+        return "Subperintah tidak dikenal. Gunakan: save, load, list, delete"
+
+    async def handle_calendar(self, args: list[str]) -> str:
+        """Google Calendar integration."""
+        from agent.calendar_client import get_next_event, get_today_events, join_event, create_event
+        if not args:
+            return get_next_event()
+        subcmd = args[0].lower()
+        if subcmd in ("next", "today"):
+            return get_today_events()
+        elif subcmd == "list":
+            return get_next_event()
+        elif subcmd == "join":
+            query = " ".join(args[1:]) if len(args) > 1 else None
+            return join_event(query)
+        elif subcmd == "create":
+            summary = " ".join(args[1:]) if len(args) > 1 else "Event"
+            return create_event(summary)
+        return "Gunakan: !calendar [today|next|list|join|create]"
+
+    async def handle_quicknote(self, args: list[str]) -> str:
+        """Quick markdown note."""
+        from agent.quicknote import create_note, list_notes
+        if not args:
+            return list_notes()
+        title = args[0]
+        content = " ".join(args[1:]) if len(args) > 1 else ""
+        return create_note(title, content)
+
+    async def handle_browser(self, args: list[str]) -> str:
+        """Browser control."""
+        from agent.browser_controller import browser_new, browser_search, browser_scroll, browser_refresh, browser_close
+        if not args:
+            return "Gunakan: !browser [new|search|scroll|refresh|close] [args]"
+        subcmd = args[0].lower()
+        if subcmd == "new" and len(args) > 1:
+            return browser_new(" ".join(args[1:]))
+        elif subcmd == "search" and len(args) > 1:
+            return browser_search(" ".join(args[1:]))
+        elif subcmd == "scroll":
+            direction = args[1] if len(args) > 1 and args[1] in ("up", "down") else "down"
+            return browser_scroll(direction)
+        elif subcmd == "refresh":
+            return browser_refresh()
+        elif subcmd == "close":
+            tab = int(args[1]) if len(args) > 1 and args[1].isdigit() else None
+            return browser_close(tab)
+        return "Subperintah tidak dikenal."
+
+    async def handle_daily(self, args: list[str]) -> str:
+        """Daily activity report."""
+        from agent.daily_report import generate_daily_report
+        period = "today"
+        if args and args[0].lower() == "yesterday":
+            period = "yesterday"
+        return generate_daily_report(period)
+
+    async def handle_reminder(self, args: list[str]) -> str:
+        """Reminder system."""
+        from agent.reminder import reminder_manager
+        if not args:
+            return reminder_manager.list_reminders()
+        subcmd = args[0].lower()
+        if subcmd == "add" and len(args) >= 3:
+            return reminder_manager.add(" ".join(args[1:-1]), args[-1])
+        elif subcmd == "list":
+            return reminder_manager.list_reminders()
+        elif subcmd in ("del", "delete") and len(args) > 1 and args[1].isdigit():
+            return reminder_manager.delete(int(args[1]))
+        elif subcmd == "add":
+            return "Gunakan: !reminder add <teks> <waktu>. Contoh: !reminder add meeting 30m"
+        return "Gunakan: !reminder [add|list|delete] [args]"
+
+    async def handle_task(self, args: list[str]) -> str:
+        """Task sync with external services."""
+        from agent.task_sync import task_manager
+        if not args:
+            return task_manager.list_tasks()
+        subcmd = args[0].lower()
+        if subcmd in ("sync", "add") and len(args) >= 2:
+            text = " ".join(args[1:])
+            deadline = None
+            if " | " in text:
+                parts = text.split(" | ", 1)
+                text = parts[0]
+                deadline = parts[1]
+            return task_manager.add(text, deadline)
+        elif subcmd == "list":
+            return task_manager.list_tasks()
+        elif subcmd == "done" and len(args) > 1 and args[1].isdigit():
+            return task_manager.done(int(args[1]))
+        elif subcmd in ("del", "delete") and len(args) > 1 and args[1].isdigit():
+            return task_manager.delete(int(args[1]))
+        return "Gunakan: !task [add|list|done|delete] [args]"
+
+    async def handle_meeting(self, args: list[str]) -> str:
+        """Meeting mode — prepare for online meetings."""
+        from agent.meeting_mode import prepare_meeting
+        if not args:
+            return "Gunakan: !meeting mode [on|off] [nama meeting]"
+        subcmd = args[0].lower()
+        if subcmd == "mode" and len(args) > 1 and args[1].lower() == "on":
+            meeting_name = " ".join(args[2:]) if len(args) > 2 else "Meeting"
+            return prepare_meeting(meeting_name)
+        elif subcmd == "mode" and len(args) > 1 and args[1].lower() == "off":
+            from agent.focus import focus_manager
+            return focus_manager.stop()
+        return "Gunakan: !meeting mode [on|off] [nama]"
+
+    async def handle_custom(self, args: list[str]) -> str:
+        """Custom command aliases."""
+        from agent.custom_aliases import alias_manager
+        if not args:
+            return alias_manager.list_aliases()
+        subcmd = args[0].lower()
+        if subcmd == "alias" and len(args) >= 3:
+            return alias_manager.set(args[1], " ".join(args[2:]))
+        elif subcmd == "list":
+            return alias_manager.list_aliases()
+        elif subcmd in ("del", "delete") and len(args) > 1:
+            return alias_manager.delete(args[1])
+        return "Gunakan: !custom alias <nama> <perintah> atau !custom list"
+
+    # ── PHASE 5: Advanced & Pro Features ──────────────────────────────
+
+    async def handle_multi(self, args: list[str]) -> str:
+        if not args:
+            return "Gunakan: !multi [monitor|device] [args]"
+        subcmd = args[0].lower()
+        if subcmd in ("monitor", "display"):
+            return await self.handle_multi_monitor(args[1:])
+        elif subcmd in ("device", "devices", "perangkat"):
+            return await self.handle_multi_device(args[1:])
+        return "Gunakan: !multi [monitor|device] [args]"
+
+    async def handle_time_track(self, args: list[str]) -> str:
+        from agent.time_track import start_track, stop_track, status_track, report_track
+        if not args:
+            return "Gunakan: !time track [start|stop|status|report] [project]"
+        subcmd = args[0].lower()
+        if subcmd == "track" and len(args) > 1:
+            subcmd = args[1].lower()
+            args = args[1:]
+        if subcmd in ("start", "mulai"):
+            project = " ".join(args[1:]) if len(args) > 1 else "General"
+            return start_track(project)
+        elif subcmd == "stop" or subcmd == "selesai":
+            return stop_track()
+        elif subcmd == "status":
+            return status_track()
+        elif subcmd in ("report", "laporan"):
+            days = int(args[1]) if len(args) > 1 and args[1].isdigit() else 7
+            return report_track(days)
+        return "Gunakan: !time track [start|stop|status|report] [project]"
+
+    async def handle_session(self, args: list[str]) -> str:
+        from agent.session_handoff import save_session, list_sessions, restore_session, delete_session
+        if not args:
+            return "Gunakan: !session [save|list|restore|delete] <name>"
+        subcmd = args[0].lower()
+        if subcmd in ("save", "simpan") and len(args) > 1:
+            return save_session(args[1])
+        elif subcmd in ("list", "daftar"):
+            return list_sessions()
+        elif subcmd in ("restore", "pulihkan") and len(args) > 1:
+            return restore_session(args[1])
+        elif subcmd in ("del", "delete", "hapus") and len(args) > 1:
+            return delete_session(args[1])
+        return "Gunakan: !session [save|list|restore|delete] <name>"
+
+    async def handle_share_screen(self, args: list[str]) -> str:
+        from agent.share_screen import take_screenshot
+        fullscreen = True
+        if args:
+            a0 = args[0].lower()
+            if a0 == "screen" and len(args) > 1:
+                a0 = args[1].lower()
+            if a0 in ("area", "select", "region"):
+                fullscreen = False
+        return take_screenshot(fullscreen)
+
+    async def handle_multi_device(self, args: list[str]) -> str:
+        from agent.multi_device import register_device, list_devices, remove_device, send_command
+        if not args:
+            return list_devices()
+        subcmd = args[0].lower()
+        if subcmd in ("register", "daftar") and len(args) >= 2:
+            ip = args[2] if len(args) > 2 else None
+            return register_device(args[1], ip)
+        elif subcmd in ("list", "daftar"):
+            return list_devices()
+        elif subcmd in ("del", "delete", "hapus") and len(args) > 1:
+            return remove_device(args[1])
+        elif subcmd in ("send", "kirim") and len(args) >= 3:
+            return send_command(args[1], " ".join(args[2:]))
+        return "Gunakan: !multi device [register|list|delete|send] [args]"
+
+    async def handle_profile(self, args: list[str]) -> str:
+        from agent.profile import create_profile, list_profiles, apply_profile, delete_profile
+        if not args:
+            return list_profiles()
+        subcmd = args[0].lower()
+        if subcmd in ("create", "buat") and len(args) >= 2:
+            apps = args[2:] if len(args) > 2 else []
+            return create_profile(args[1], apps)
+        elif subcmd in ("list", "daftar"):
+            return list_profiles()
+        elif subcmd in ("apply", "pakai") and len(args) > 1:
+            return apply_profile(args[1])
+        elif subcmd in ("del", "delete", "hapus") and len(args) > 1:
+            return delete_profile(args[1])
+        return "Gunakan: !profile [create|list|apply|delete] [name] [apps]"
+
+    async def handle_dash(self, args: list[str]) -> str:
+        from agent.dash import get_dashboard
+        return get_dashboard()
+
+    async def handle_activity_log(self, args: list[str]) -> str:
+        from agent.activity_log import view_log
+        days = 1
+        action_filter = None
+        limit = 20
+        if args:
+            if args[0] == "log" and len(args) > 1:
+                args = args[1:]
+            if args:
+                if args[0].isdigit():
+                    days = int(args[0])
+                elif args[0].startswith("--filter="):
+                    action_filter = args[0].split("=", 1)[1]
+                if len(args) > 1 and args[-1].isdigit():
+                    limit = int(args[-1])
+        return view_log(days, action_filter, limit)
+
+    async def handle_vpn(self, args: list[str]) -> str:
+        from agent.vpn_manager import vpn_status, vpn_connect, vpn_disconnect
+        if not args:
+            return vpn_status()
+        subcmd = args[0].lower()
+        if subcmd in ("status", "cek"):
+            return vpn_status()
+        elif subcmd in ("connect", "on", "hubung") and len(args) > 1:
+            return vpn_connect(args[1])
+        elif subcmd in ("disconnect", "off", "putus"):
+            name = args[1] if len(args) > 1 else None
+            return vpn_disconnect(name)
+        return "Gunakan: !vpn [status|connect|disconnect] [name]"
+
+    async def handle_tunnel(self, args: list[str]) -> str:
+        from agent.tunnel_manager import create_tunnel, list_tunnels, start_tunnel, delete_tunnel
+        if not args:
+            return list_tunnels()
+        subcmd = args[0].lower()
+        if subcmd in ("create", "buat") and len(args) >= 3:
+            port = int(args[3]) if len(args) > 3 else None
+            return create_tunnel(args[1], args[2], port)
+        elif subcmd in ("list", "daftar"):
+            return list_tunnels()
+        elif subcmd in ("start", "mulai") and len(args) > 1:
+            return start_tunnel(args[1])
+        elif subcmd in ("del", "delete", "hapus") and len(args) > 1:
+            return delete_tunnel(args[1])
+        return "Gunakan: !tunnel [create|list|start|delete] [args]"
+
+    async def handle_ai_agent(self, args: list[str]) -> str:
+        from agent.ai_agent import run_agent, get_history, clear_history
+        if not args:
+            return "Gunakan: !ai agent <task> atau !ai agent [history|clear]"
+        subcmd = args[0].lower()
+        if subcmd in ("history", "histori"):
+            return get_history()
+        elif subcmd in ("clear", "bersih"):
+            return clear_history()
+        task = " ".join(args)
+        return await run_agent(task)
 
 

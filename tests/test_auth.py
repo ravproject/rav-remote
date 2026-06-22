@@ -13,6 +13,7 @@ class TestAuth(unittest.TestCase):
         os.environ["JWT_SECRET_KEY"] = "test_secret"
         os.environ["ALLOWED_USER_IDS"] = "123,456"
         os.environ["MAX_COMMANDS_PER_MINUTE"] = "2"
+        os.environ["ENCRYPTION_KEY"] = "a" * 32
         from bot.auth import AuthManager
         self.auth_manager = AuthManager()
 

@@ -25,6 +25,17 @@ class CommandRouter:
                 return "⚠️ Akses Ditolak: " + args[0].split(":", 1)[1]
             elif args and args[0].startswith("__NIM_ERROR__:"):
                 return "🤖 AI Error: " + args[0].split(":", 1)[1]
+            # Cek custom alias sebelum mengembalikan unknown
+            if message_text.startswith("!"):
+                try:
+                    from agent.custom_aliases import alias_manager
+                    alias_name = message_text.split()[0][1:].lower()
+                    alias_cmd = alias_manager.get(alias_name)
+                    if alias_cmd:
+                        logger.info(f"Alias resolved: {alias_name} -> {alias_cmd}")
+                        return await self.route(alias_cmd, user_id)
+                except Exception:
+                    pass
             return "❓ Perintah tidak dikenali. Ketik `!help` untuk bantuan."
 
         # Whitelist validation
@@ -142,15 +153,11 @@ class CommandRouter:
                 self.auditor.log_event(user_id, "KILL", args[0])
                 return result
 
-            elif command_name in ["volume", "mute", "alarm"]:
+            elif command_name in ["mute", "alarm"]:
                 value = args[0] if args else None
                 result = await self.handler.handle_audio_control(command_name, value)
                 self.auditor.log_event(user_id, f"AUDIO_{command_name.upper()}", str(value))
                 return result
-
-            elif command_name == "schedule":
-                # Schedule is intercepted by the bot handler, but if it reaches here, it means syntax was wrong or it's a fallback.
-                return "ℹ️ Format jadwal: `!schedule in <waktu> <perintah>`. Contoh: `!schedule in 30m !lock`"
 
             elif command_name in ["agy", "opencode"]:
                 result = await self.handler.handle_ai_cli(command_name, args)
@@ -190,8 +197,8 @@ class CommandRouter:
                 return result
 
             elif command_name == "battery":
-                result = await self.handler.handle_battery()
-                self.auditor.log_event(user_id, "BATTERY", "")
+                result = await self.handler.handle_battery(args)
+                self.auditor.log_event(user_id, "BATTERY", " ".join(args)[:50])
                 return result
 
             elif command_name == "notif":
@@ -302,6 +309,269 @@ class CommandRouter:
                 self.auditor.log_event(user_id, "WEBCAM_GUARD", " ".join(args)[:50])
                 return result
 
+            # ── PHASE 1: Core Productivity Features ──────────────────────────────
+
+            elif command_name == "focus":
+                result = await self.handler.handle_focus(args)
+                self.auditor.log_event(user_id, "FOCUS", " ".join(args)[:50])
+                return result
+
+            elif command_name == "workspace":
+                result = await self.handler.handle_workspace(args)
+                self.auditor.log_event(user_id, "WORKSPACE", " ".join(args)[:50])
+                return result
+
+            elif command_name == "calendar":
+                result = await self.handler.handle_calendar(args)
+                self.auditor.log_event(user_id, "CALENDAR", " ".join(args)[:50])
+                return result
+
+            elif command_name == "quicknote":
+                result = await self.handler.handle_quicknote(args)
+                self.auditor.log_event(user_id, "QUICKNOTE", " ".join(args)[:50])
+                return result
+
+            elif command_name == "browser":
+                result = await self.handler.handle_browser(args)
+                self.auditor.log_event(user_id, "BROWSER", " ".join(args)[:50])
+                return result
+
+            elif command_name == "daily":
+                result = await self.handler.handle_daily(args)
+                self.auditor.log_event(user_id, "DAILY_REPORT", " ".join(args)[:50])
+                return result
+
+            elif command_name == "reminder":
+                result = await self.handler.handle_reminder(args)
+                self.auditor.log_event(user_id, "REMINDER", " ".join(args)[:50])
+                return result
+
+            elif command_name == "task":
+                result = await self.handler.handle_task(args)
+                self.auditor.log_event(user_id, "TASK", " ".join(args)[:50])
+                return result
+
+            elif command_name == "meeting":
+                result = await self.handler.handle_meeting(args)
+                self.auditor.log_event(user_id, "MEETING", " ".join(args)[:50])
+                return result
+
+            elif command_name == "custom":
+                result = await self.handler.handle_custom(args)
+                self.auditor.log_event(user_id, "CUSTOM_ALIAS", " ".join(args)[:50])
+                return result
+
+            # ── PHASE 2: AI & Automation Intelligence ──────────────────────────────
+
+            elif command_name == "ai":
+                if not args:
+                    return "Gunakan: !ai [work|write|automate|summarize|research|insight] [args]"
+                ai_sub = args[0].lower()
+                if ai_sub == "work":
+                    return await self.handler.handle_ai_work(args[1:])
+                elif ai_sub == "write":
+                    return await self.handler.handle_ai_write(args[1:])
+                elif ai_sub == "automate":
+                    return await self.handler.handle_ai_automate(args[1:])
+                elif ai_sub == "summarize":
+                    return await self.handler.handle_ai_summarize(args[1:])
+                elif ai_sub == "research":
+                    return await self.handler.handle_ai_research(args[1:])
+                elif ai_sub == "insight":
+                    return await self.handler.handle_ai_insight(args[1:])
+                elif ai_sub == "agent":
+                    return await self.handler.handle_ai_agent(args[1:])
+                return "Subperintah AI tidak dikenal. Gunakan: work, write, automate, summarize, research, insight, agent"
+
+            elif command_name == "smart_clip":
+                result = await self.handler.handle_smart_clip(args)
+                self.auditor.log_event(user_id, "SMART_CLIPBOARD", " ".join(args)[:50])
+                return result
+
+            elif command_name == "macro":
+                result = await self.handler.handle_macro(args)
+                self.auditor.log_event(user_id, "MACRO", " ".join(args)[:50])
+                return result
+
+            elif command_name == "schedule":
+                result = await self.handler.handle_schedule(args)
+                self.auditor.log_event(user_id, "SCHEDULE", " ".join(args)[:50])
+                return result
+
+            elif command_name == "voice_cmd":
+                result = await self.handler.handle_voice_cmd(args)
+                self.auditor.log_event(user_id, "VOICE_CMD", " ".join(args)[:50])
+                return result
+
+            # ── PHASE 3: File, Sync & Data Management ──────────────────────────────
+
+            elif command_name == "sync":
+                result = await self.handler.handle_sync(args)
+                self.auditor.log_event(user_id, "SYNC", " ".join(args)[:50])
+                return result
+
+            elif command_name == "quick":
+                result = await self.handler.handle_quick(args)
+                self.auditor.log_event(user_id, "QUICK", " ".join(args)[:50])
+                return result
+
+            elif command_name == "quick_upload":
+                result = await self.handler.handle_quick_upload(args)
+                self.auditor.log_event(user_id, "QUICK_UPLOAD", " ".join(args)[:50])
+                return result
+
+            elif command_name == "recent":
+                result = await self.handler.handle_recent(args)
+                self.auditor.log_event(user_id, "RECENT", " ".join(args)[:50])
+                return result
+
+            elif command_name == "search_content":
+                result = await self.handler.handle_search_content(args)
+                self.auditor.log_event(user_id, "SEARCH_CONTENT", " ".join(args)[:50])
+                return result
+
+            elif command_name == "convert":
+                result = await self.handler.handle_convert(args)
+                self.auditor.log_event(user_id, "CONVERT", " ".join(args)[:50])
+                return result
+
+            elif command_name == "backup":
+                result = await self.handler.handle_backup(args)
+                self.auditor.log_event(user_id, "BACKUP", " ".join(args)[:50])
+                return result
+
+            elif command_name == "organize":
+                result = await self.handler.handle_organize(args)
+                self.auditor.log_event(user_id, "ORGANIZE", " ".join(args)[:50])
+                return result
+
+            elif command_name == "file_watcher":
+                result = await self.handler.handle_file_watcher(args)
+                self.auditor.log_event(user_id, "FILE_WATCHER", " ".join(args)[:50])
+                return result
+
+            elif command_name == "version":
+                result = await self.handler.handle_version(args)
+                self.auditor.log_event(user_id, "VERSION", " ".join(args)[:50])
+                return result
+
+            elif command_name == "clean":
+                result = await self.handler.handle_clean(args)
+                self.auditor.log_event(user_id, "CLEAN", " ".join(args)[:50])
+                return result
+
+            # ── PHASE 4: System Enhancement & Convenience ─────────────────────────
+
+            elif command_name == "volume":
+                result = await self.handler.handle_volume_app(args)
+                self.auditor.log_event(user_id, "VOLUME", " ".join(args)[:50])
+                return result
+
+            elif command_name == "power":
+                result = await self.handler.handle_power(args)
+                self.auditor.log_event(user_id, "POWER", " ".join(args)[:50])
+                return result
+
+            elif command_name == "multi_monitor":
+                result = await self.handler.handle_multi_monitor(args)
+                self.auditor.log_event(user_id, "MULTI_MONITOR", " ".join(args)[:50])
+                return result
+
+            elif command_name == "sleep":
+                result = await self.handler.handle_sleep(args)
+                self.auditor.log_event(user_id, "SLEEP", " ".join(args)[:50])
+                return result
+
+            elif command_name == "wake":
+                result = await self.handler.handle_wake(args)
+                self.auditor.log_event(user_id, "WAKE", " ".join(args)[:50])
+                return result
+
+            elif command_name == "quick_app":
+                result = await self.handler.handle_quick_app(args)
+                self.auditor.log_event(user_id, "QUICK_APP", " ".join(args)[:50])
+                return result
+
+            elif command_name == "night_mode":
+                result = await self.handler.handle_night_mode(args)
+                self.auditor.log_event(user_id, "NIGHT_MODE", " ".join(args)[:50])
+                return result
+
+            elif command_name == "window":
+                result = await self.handler.handle_window_arrange(args)
+                self.auditor.log_event(user_id, "WINDOW", " ".join(args)[:50])
+                return result
+
+            elif command_name == "hotkey":
+                result = await self.handler.handle_hotkey(args)
+                self.auditor.log_event(user_id, "HOTKEY", " ".join(args)[:50])
+                return result
+
+            elif command_name == "launch":
+                if args and args[0].lower() == "advanced":
+                    result = await self.handler.handle_launch_advanced(args[1:])
+                else:
+                    result = await self.handler.handle_launch_app(args[0] if args else "")
+                self.auditor.log_event(user_id, "LAUNCH", " ".join(args)[:50])
+                return result
+
+            # ── PHASE 5: Advanced & Pro Features ──────────────────────────────
+
+            elif command_name == "time_track":
+                result = await self.handler.handle_time_track(args)
+                self.auditor.log_event(user_id, "TIME_TRACK", " ".join(args)[:50])
+                return result
+
+            elif command_name == "session":
+                result = await self.handler.handle_session(args)
+                self.auditor.log_event(user_id, "SESSION", " ".join(args)[:50])
+                return result
+
+            elif command_name == "share_screen":
+                result = await self.handler.handle_share_screen(args)
+                self.auditor.log_event(user_id, "SHARE_SCREEN", " ".join(args)[:50])
+                return result
+
+            elif command_name == "multi_device":
+                result = await self.handler.handle_multi_device(args)
+                self.auditor.log_event(user_id, "MULTI_DEVICE", " ".join(args)[:50])
+                return result
+
+            elif command_name == "multi":
+                result = await self.handler.handle_multi(args)
+                self.auditor.log_event(user_id, "MULTI", " ".join(args)[:50])
+                return result
+
+            elif command_name == "profile":
+                result = await self.handler.handle_profile(args)
+                self.auditor.log_event(user_id, "PROFILE", " ".join(args)[:50])
+                return result
+
+            elif command_name == "dash":
+                result = await self.handler.handle_dash(args)
+                self.auditor.log_event(user_id, "DASH", " ".join(args)[:50])
+                return result
+
+            elif command_name == "activity_log":
+                result = await self.handler.handle_activity_log(args)
+                self.auditor.log_event(user_id, "ACTIVITY_LOG", " ".join(args)[:50])
+                return result
+
+            elif command_name == "vpn":
+                result = await self.handler.handle_vpn(args)
+                self.auditor.log_event(user_id, "VPN", " ".join(args)[:50])
+                return result
+
+            elif command_name == "tunnel":
+                result = await self.handler.handle_tunnel(args)
+                self.auditor.log_event(user_id, "TUNNEL", " ".join(args)[:50])
+                return result
+
+            elif command_name == "ai_agent":
+                result = await self.handler.handle_ai_agent(args)
+                self.auditor.log_event(user_id, "AI_AGENT", " ".join(args)[:50])
+                return result
+
             elif command_name == "help":
                 return HELP_TEXT
 
@@ -369,6 +639,67 @@ HELP_TEXT = """
 `!listen [detik]` — Rekam suara sekitar (max 30s)
 `!logout` — Keluar sesi aktif
 `!help` — Tampilkan bantuan ini
+
+*6. Produktivitas (Fitur Baru):*
+`!focus [on|off] [menit]` — Mode fokus dengan Pomodoro timer + blokir situs
+`!workspace [save|load|list|delete] [nama]` — Simpan/muat seluruh sesi kerja
+`!calendar [today|next|list|join]` — Integrasi Google Calendar
+`!quicknote [judul] [isi]` — Catatan markdown cepat
+`!browser [new|search|scroll|refresh|close] [args]` — Kontrol browser dari HP
+`!daily [yesterday]` — Laporan aktivitas laptop 24 jam
+`!reminder [add|list|delete] [teks] [waktu]` — Pengingat dengan notifikasi
+`!task [add|list|done|delete] [tugas]` — Manajemen tugas terpusat
+`!meeting mode [on|off] [nama]` — Persiapan meeting otomatis
+`!custom alias [nama] [perintah]` — Buat alias perintah custom sendiri
+
+*7. AI & Automation (Fitur Phase 2):*
+`!ai work [perintah]` — AI assistant produktivitas
+`!ai write [tipe] [topik]` — Buat draft dokumen/email via AI
+`!ai automate [deskripsi]` — Buat automation script via AI
+`!ai summarize [target]` — Ringkasan file/folder via AI
+`!ai research [topik] [depth]` — Riset topik via AI, simpan ke folder Research
+`!ai insight [daily|weekly|monthly]` — Analisis pola penggunaan laptop
+`!smart clipboard [on|off|history]` — Smart clipboard dengan deteksi tipe data
+`!macro [record|play|save|list|delete] [nama]` — Rekam/putar aksi keyboard mouse
+`!schedule add <perintah> <waktu>` — Jadwalkan perintah otomatis
+`!voice cmd [on|off]` — Aktifkan voice command dari HP
+
+*8. File, Sync & Data Management (Fitur Phase 3):*
+`!sync <folder> [service]` — Sinkronisasi folder ke cloud (local/gdrive)
+`!quick upload` — Lihat folder upload untuk kirim file dari HP
+`!recent [files|folders] [jumlah]` — Daftar file/folder terbaru
+`!search content <keyword> [folder]` — Cari teks di dalam file
+`!convert <file> <format>` — Konversi format file (pandoc/ffmpeg)
+`!backup <folder> [quick|full]` — Backup folder ke penyimpanan aman
+`!organize <folder> [by type|date]` — Organisir file otomatis ke subfolder
+`!file watcher [on|off|status] <folder>` — Pantau perubahan folder realtime
+`!version [commit|history|revert|status] <file>` — Versioning file lokal
+`!clean [temp|cache|duplicates|all]` — Bersihkan sampah disk
+
+*9. System Enhancement (Fitur Phase 4):*
+`!volume [app|global] [level|up|down|mute]` — Kontrol volume global/per-app
+`!power [performance|balanced|saver]` — Ganti profil daya laptop
+`!multi monitor [list|switch|arrange] [args]` — Kelola monitor ganda
+`!sleep [delay]` — Tidurkan laptop (contoh: !sleep 5m)
+`!wake <waktu>` — Jadwalkan bangunkan laptop (contoh: !wake 07:30)
+`!quick app <nama>` — Buka aplikasi cepat (alias !launch)
+`!battery health` — Cek kesehatan baterai detail
+`!night mode [on|off]` — Dark mode + blue light filter
+`!window [arrange|snap|minimize all|close all]` — Atur semua jendela
+`!hotkey [create|list|delete] <nama> <key>` — Buat hotkey global
+`!launch advanced <app> [args]` — Luncurkan aplikasi dengan parameter
+
+*10. Advanced & Pro (Fitur Phase 5):*
+`!time track [start|stop|status|report] [project]` — Lacak waktu kerja
+`!session [save|list|restore|delete] <name>` — Simpan/pulihkan session aplikasi
+`!share screen [fullscreen|area]` — Screenshot layar
+`!multi device [register|list|delete|send] <name> [ip/command]` — Kelola multi-perangkat
+`!profile [create|list|apply|delete] <name>` — Profile pengguna (apps, power, tema)
+`!dash` — Tampilkan dashboard sistem
+`!activity log [days] [--filter=aksi]` — Lihat log aktivitas
+`!vpn [status|connect|disconnect] [name]` — Kontrol VPN
+`!tunnel [create|list|start|delete] <name> <remote> <port>` — Tunnel SSH
+`!ai agent <task>` — AI Agent untuk tugas kompleks
 
 *Mode AI (jika aktif):*
 Ketik perintah natural language langsung untuk diterjemahkan oleh AI. Contoh:

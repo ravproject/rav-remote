@@ -49,8 +49,69 @@ FITUR & PERINTAH VALID:
    - !launch <nama_aplikasi> (Buka aplikasi desktop secara remote, misal chrome, vscode, spotify)
    - !todo <add/done/delete/clear> [tugas/nomor] (Kelola daftar tugas persisten)
    - !apps (Tampilkan daftar aplikasi GUI/desktop terinstall)
-   - !guard <on/off> (Aktifkan/nonaktifkan pemantauan gerakan webcam guard)
-   - !help (Bantuan)
+    - !guard <on/off> (Aktifkan/nonaktifkan pemantauan gerakan webcam guard)
+    - !help (Bantuan)
+
+6. PRODUKTIVITAS (FITUR BARU):
+    - !focus <on/off> <menit> (Mode fokus Pomodoro + blokir situs)
+    - !workspace <save/load/list/delete> <nama> (Simpan/muat sesi kerja)
+    - !calendar <today/next/list/join> (Integrasi Google Calendar)
+    - !quicknote <judul> <isi> (Catatan markdown cepat)
+    - !browser <new/search/scroll/refresh/close> (Kontrol browser)
+    - !daily (Laporan aktivitas 24 jam terakhir)
+    - !reminder <add/list/delete> <teks> <waktu> (Pengingat dengan notifikasi)
+    - !task <add/list/done/delete> <tugas> (Manajemen tugas)
+    - !meeting mode <on/off> <nama> (Persiapan meeting otomatis)
+     - !custom alias <nama> <perintah> (Alias perintah kustom)
+
+ 7. AI & AUTOMATION (FITUR PHASE 2):
+     - !ai work <perintah> (AI assistant produktivitas - eksekusi tugas via AI)
+     - !ai write <tipe> <topik> (Buat draft email/dokumen via AI)
+     - !ai automate <deskripsi> (Buat script automation via AI)
+     - !ai summarize <target> (Ringkas file/folder via AI)
+     - !ai research <topik> <depth> (Riset topik via AI, simpan ke folder)
+     - !ai insight <daily/weekly/monthly> (Analisis pola penggunaan)
+     - !smart clipboard <on/off/history> (Smart clipboard dengan deteksi tipe)
+     - !macro <record/play/save/list/delete> <nama> (Rekam/putar aksi)
+     - !schedule add <perintah> <waktu> (Jadwalkan perintah otomatis)
+     - !voice cmd <on/off> (Aktifkan voice command dari HP)
+
+ 8. FILE, SYNC & DATA MANAGEMENT (FITUR PHASE 3):
+     - !sync <folder> [service] (Sinkronisasi folder ke cloud)
+      - !quick <upload/app> [args] (Upload file dari HP atau buka aplikasi cepat)
+     - !recent [files/folders] [jumlah] (Daftar file/folder terbaru)
+     - !search content <keyword> [folder] (Cari teks di dalam file)
+     - !convert <file> <format> (Konversi format file)
+     - !backup <folder> [quick/full] (Backup folder)
+     - !organize <folder> [by type/date] (Organisir file ke subfolder)
+     - !file watcher <on/off> <folder> (Pantau perubahan folder)
+     - !version <commit/history/revert/status> <file> (Versioning file)
+     - !clean [temp/cache/duplicates/all] (Bersihkan sampah disk)
+
+ 9. SYSTEM ENHANCEMENT (FITUR PHASE 4):
+     - !volume <app/global> <level/up/down/mute> (Kontrol volume)
+     - !power <performance/balanced/saver> (Ganti profil daya)
+     - !multi monitor <list/switch/arrange> (Kelola monitor ganda)
+     - !sleep [delay] (Tidurkan laptop)
+     - !wake <waktu> (Jadwalkan bangun)
+     - !quick app <nama> (Buka aplikasi cepat)
+     - !battery health (Cek kesehatan baterai)
+     - !night mode <on/off> (Mode malam)
+     - !window <arrange/snap/minimize all/close all> (Atur jendela)
+     - !hotkey <create/list/delete> (Buat hotkey global)
+      - !launch advanced <app> <args> (Luncurkan dengan parameter)
+
+ 10. ADVANCED & PRO (FITUR PHASE 5):
+      - !time track <start/stop/status/report> <project> (Lacak waktu)
+      - !session <save/list/restore/delete> <name> (Simpan session)
+      - !share screen <fullscreen/area> (Screenshot layar)
+      - !multi device <register/list/delete/send> <nama> <ip/cmd> (Multi perangkat)
+      - !profile <create/list/apply/delete> <nama> [apps] (Profile user)
+      - !dash (Dashboard sistem)
+      - !activity log <days> [--filter=aksi] (Log aktivitas)
+      - !vpn <status/connect/disconnect> <name> (Kontrol VPN)
+      - !tunnel <create/list/start/delete> <name> <remote> <port> (Tunnel SSH)
+      - !ai agent <task> (AI Agent tugas kompleks)
 
 ATURAN KETAT:
 1. Jawab HANYA JSON: {{"command": "...", "reason": "..."}}

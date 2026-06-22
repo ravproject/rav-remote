@@ -251,7 +251,383 @@ safe_commands:
     requires_confirmation: false
     sandbox_required: false
 
+  # PHASE 1: Core Productivity
+  focus:
+    description: "Mode fokus dengan Pomodoro timer dan blokir distraksi"
+    requires_confirmation: false
+    sandbox_required: false
+  pomodoro:
+    description: "Alias focus"
+    requires_confirmation: false
+    sandbox_required: false
+  workspace:
+    description: "Simpan/muat ulang sesi kerja (workspace)"
+    requires_confirmation: false
+    sandbox_required: false
+  ws:
+    description: "Alias workspace"
+    requires_confirmation: false
+    sandbox_required: false
+  calendar:
+    description: "Integrasi Google Calendar"
+    requires_confirmation: false
+    sandbox_required: false
+  cal:
+    description: "Alias calendar"
+    requires_confirmation: false
+    sandbox_required: false
+  quicknote:
+    description: "Membuat catatan cepat markdown"
+    requires_confirmation: false
+    sandbox_required: false
+  note:
+    description: "Alias quicknote"
+    requires_confirmation: false
+    sandbox_required: false
+  browser:
+    description: "Kontrol browser (buka, scroll, tutup tab)"
+    requires_confirmation: false
+    sandbox_required: false
+  chrome:
+    description: "Alias browser"
+    requires_confirmation: false
+    sandbox_required: false
+  daily:
+    description: "Laporan aktivitas harian laptop"
+    requires_confirmation: false
+    sandbox_required: false
+  report:
+    description: "Alias daily"
+    requires_confirmation: false
+    sandbox_required: false
+  reminder:
+    description: "Buat pengingat dengan notifikasi"
+    requires_confirmation: false
+    sandbox_required: false
+  remind:
+    description: "Alias reminder"
+    requires_confirmation: false
+    sandbox_required: false
+  task:
+    description: "Sinkronisasi tugas lintas platform"
+    requires_confirmation: false
+    sandbox_required: false
+  todoist:
+    description: "Alias task"
+    requires_confirmation: false
+    sandbox_required: false
+  meeting:
+    description: "Mode persiapan meeting otomatis"
+    requires_confirmation: false
+    sandbox_required: false
+  meet:
+    description: "Alias meeting"
+    requires_confirmation: false
+    sandbox_required: false
+  custom:
+    description: "Membuat/mengelola alias perintah kustom"
+    requires_confirmation: false
+    sandbox_required: false
+  alias:
+    description: "Alias custom"
+    requires_confirmation: false
+    sandbox_required: false
 
+  # PHASE 2: AI & Automation Intelligence
+  ai:
+    description: "AI productivity assistant (work/write/automate/summarize/research/insight)"
+    requires_confirmation: false
+    sandbox_required: false
+  smart_clip:
+    description: "Smart clipboard with type detection and history"
+    requires_confirmation: false
+    sandbox_required: false
+  smartclip:
+    description: "Alias smart_clip"
+    requires_confirmation: false
+    sandbox_required: false
+  smart:
+    description: "Alias smart_clip"
+    requires_confirmation: false
+    sandbox_required: false
+  macro:
+    description: "Record, save, and replay keyboard/mouse macros"
+    requires_confirmation: false
+    sandbox_required: false
+  schedule:
+    description: "Jadwalkan perintah pada waktu tertentu"
+    requires_confirmation: false
+    sandbox_required: false
+  voice_cmd:
+    description: "Aktifkan/nonaktifkan voice command dari HP"
+    requires_confirmation: false
+    sandbox_required: false
+  voicecmd:
+    description: "Alias voice_cmd"
+    requires_confirmation: false
+    sandbox_required: false
+  voice:
+    description: "Alias voice_cmd"
+    requires_confirmation: false
+    sandbox_required: false
+
+  # PHASE 3: File, Sync & Data Management
+  sync:
+    description: "Sinkronisasi folder dua arah dengan cloud service"
+    requires_confirmation: false
+    sandbox_required: false
+  quick:
+    description: "Dispatcher untuk quick upload/quick app"
+    requires_confirmation: false
+    sandbox_required: false
+  quick_upload:
+    description: "Upload file dari HP ke folder laptop"
+    requires_confirmation: false
+    sandbox_required: false
+  quickupload:
+    description: "Alias quick_upload"
+    requires_confirmation: false
+    sandbox_required: false
+  upload:
+    description: "Alias quick_upload"
+    requires_confirmation: false
+    sandbox_required: false
+  recent:
+    description: "Daftar file/folder terbaru"
+    requires_confirmation: false
+    sandbox_required: false
+  search_content:
+    description: "Cari konten file berdasarkan keyword"
+    requires_confirmation: false
+    sandbox_required: false
+  searchcontent:
+    description: "Alias search_content"
+    requires_confirmation: false
+    sandbox_required: false
+  search:
+    description: "Alias search_content"
+    requires_confirmation: false
+    sandbox_required: false
+  cari:
+    description: "Alias search_content"
+    requires_confirmation: false
+    sandbox_required: false
+  convert:
+    description: "Konversi format file (pandoc/ffmpeg)"
+    requires_confirmation: false
+    sandbox_required: false
+  converter:
+    description: "Alias convert"
+    requires_confirmation: false
+    sandbox_required: false
+  backup:
+    description: "Backup folder ke penyimpanan lokal/cloud"
+    requires_confirmation: false
+    sandbox_required: false
+  organize:
+    description: "Organisir file ke subfolder berdasarkan type/date"
+    requires_confirmation: false
+    sandbox_required: false
+  rapikan:
+    description: "Alias organize"
+    requires_confirmation: false
+    sandbox_required: false
+  file_watcher:
+    description: "Pantau perubahan folder secara realtime"
+    requires_confirmation: false
+    sandbox_required: false
+  filewatcher:
+    description: "Alias file_watcher"
+    requires_confirmation: false
+    sandbox_required: false
+  file:
+    description: "Alias file_watcher"
+    requires_confirmation: false
+    sandbox_required: false
+  watcher:
+    description: "Alias file_watcher"
+    requires_confirmation: false
+    sandbox_required: false
+  version:
+    description: "Versioning file lokal (commit/history/revert)"
+    requires_confirmation: false
+    sandbox_required: false
+  versi:
+    description: "Alias version"
+    requires_confirmation: false
+    sandbox_required: false
+  clean:
+    description: "Bersihkan file temp/cache/duplikat"
+    requires_confirmation: false
+    sandbox_required: false
+  bersihkan:
+    description: "Alias clean"
+    requires_confirmation: false
+    sandbox_required: false
+
+  # PHASE 4: System Enhancement & Convenience
+  power:
+    description: "Ganti profil daya (performance/balanced/saver)"
+    requires_confirmation: false
+    sandbox_required: false
+  performance:
+    description: "Alias power"
+    requires_confirmation: false
+    sandbox_required: false
+  multi_monitor:
+    description: "Kelola multi monitor (list/switch/arrange)"
+    requires_confirmation: false
+    sandbox_required: false
+  multi:
+    description: "Dispatcher multi (monitor/device)"
+    requires_confirmation: false
+    sandbox_required: false
+  multimonitor:
+    description: "Alias multi_monitor"
+    requires_confirmation: false
+    sandbox_required: false
+  monitor:
+    description: "Alias multi_monitor"
+    requires_confirmation: false
+    sandbox_required: false
+  display:
+    description: "Alias multi_monitor"
+    requires_confirmation: false
+    sandbox_required: false
+  sleep:
+    description: "Tidurkan laptop (dengan delay opsional)"
+    requires_confirmation: false
+    sandbox_required: false
+  wake:
+    description: "Jadwalkan bangunkan laptop"
+    requires_confirmation: false
+    sandbox_required: false
+  quick_app:
+    description: "Buka aplikasi cepat via alias"
+    requires_confirmation: false
+    sandbox_required: false
+  quickapp:
+    description: "Alias quick_app"
+    requires_confirmation: false
+    sandbox_required: false
+  night_mode:
+    description: "Aktifkan/nonaktifkan mode malam (dark mode + blue light filter)"
+    requires_confirmation: false
+    sandbox_required: false
+  nightmode:
+    description: "Alias night_mode"
+    requires_confirmation: false
+    sandbox_required: false
+  night:
+    description: "Alias night_mode"
+    requires_confirmation: false
+    sandbox_required: false
+  window:
+    description: "Atur jendela (arrange/snap/minimize all/close all)"
+    requires_confirmation: false
+    sandbox_required: false
+  hotkey:
+    description: "Buat/kelola hotkey global"
+    requires_confirmation: false
+    sandbox_required: false
+  hotkeys:
+    description: "Alias hotkey"
+    requires_confirmation: false
+    sandbox_required: false
+
+  # PHASE 5: Advanced & Pro Features
+  time_track:
+    description: "Lacak waktu kerja (start/stop/status/report)"
+    requires_confirmation: false
+    sandbox_required: false
+  track:
+    description: "Alias time_track"
+    requires_confirmation: false
+    sandbox_required: false
+  session:
+    description: "Simpan/pulihkan session aplikasi"
+    requires_confirmation: false
+    sandbox_required: false
+  handoff:
+    description: "Alias session"
+    requires_confirmation: false
+    sandbox_required: false
+  share_screen:
+    description: "Screenshot layar (fullscreen/area)"
+    requires_confirmation: false
+    sandbox_required: false
+  share:
+    description: "Alias share_screen"
+    requires_confirmation: false
+    sandbox_required: false
+  screenshare:
+    description: "Alias share_screen"
+    requires_confirmation: false
+    sandbox_required: false
+  multi_device:
+    description: "Kelola multi-perangkat"
+    requires_confirmation: false
+    sandbox_required: false
+  device:
+    description: "Alias multi_device"
+    requires_confirmation: false
+    sandbox_required: false
+  devices:
+    description: "Alias multi_device"
+    requires_confirmation: false
+    sandbox_required: false
+  profile:
+    description: "Profile pengguna (apps, power, tema)"
+    requires_confirmation: false
+    sandbox_required: false
+  profil:
+    description: "Alias profile"
+    requires_confirmation: false
+    sandbox_required: false
+  dash:
+    description: "Dashboard sistem"
+    requires_confirmation: false
+    sandbox_required: false
+  dashboard:
+    description: "Alias dash"
+    requires_confirmation: false
+    sandbox_required: false
+  activity_log:
+    description: "Lihat log aktivitas"
+    requires_confirmation: false
+    sandbox_required: false
+  log:
+    description: "Alias activity_log"
+    requires_confirmation: false
+    sandbox_required: false
+  activity:
+    description: "Alias activity_log"
+    requires_confirmation: false
+    sandbox_required: false
+  vpn:
+    description: "Kontrol VPN (status/connect/disconnect)"
+    requires_confirmation: false
+    sandbox_required: false
+  tunnel:
+    description: "Tunnel SSH (create/list/start/delete)"
+    requires_confirmation: false
+    sandbox_required: false
+  ssh:
+    description: "Alias tunnel"
+    requires_confirmation: false
+    sandbox_required: false
+  ai_agent:
+    description: "AI Agent untuk tugas kompleks"
+    requires_confirmation: false
+    sandbox_required: false
+  aiagent:
+    description: "Alias ai_agent"
+    requires_confirmation: false
+    sandbox_required: false
+  agent:
+    description: "Alias ai_agent"
+    requires_confirmation: false
+    sandbox_required: false
 
 blocked_patterns:
   - "rm -rf"

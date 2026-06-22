@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAV-REMOTE — Dokumentasi Fitur</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --bg2: #161b22;
+    --bg3: #21262d;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text2: #8b949e;
+    --accent: #58a6ff;
+    --accent2: #3fb950;
+    --accent3: #d29922;
+    --danger: #f85149;
+    --code: #f0e6d2;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* ── NAV ── */
+  nav {
+    position: fixed; top: 0; width: 100%; z-index: 100;
+    background: rgba(13,17,23,.92); backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 24px; display: flex; align-items: center; gap: 20px;
+  }
+  nav .logo { font-weight: 700; font-size: 1.2em; color: var(--accent); }
+  nav a { color: var(--text2); font-size: .9em; }
+  nav input {
+    margin-left: auto; background: var(--bg3); border: 1px solid var(--border);
+    color: var(--text); padding: 6px 12px; border-radius: 6px; width: 240px;
+    font-size: .9em;
+  }
+  nav input:focus { outline: none; border-color: var(--accent); }
+
+  /* ── HERO ── */
+  .hero {
+    padding: 120px 24px 80px; text-align: center;
+    background: linear-gradient(180deg, #0d1117 0%, #161b22 100%);
+  }
+  .hero h1 { font-size: 3em; font-weight: 800; margin-bottom: 12px; }
+  .hero h1 span { color: var(--accent); }
+  .hero p { font-size: 1.2em; color: var(--text2); max-width: 640px; margin: 0 auto 24px; }
+  .hero .stats { display: flex; justify-content: center; gap: 40px; margin-top: 32px; }
+  .hero .stats div { text-align: center; }
+  .hero .stats .num { font-size: 2em; font-weight: 700; color: var(--accent2); }
+  .hero .stats .lbl { font-size: .85em; color: var(--text2); }
+
+  /* ── CONTENT ── */
+  .container { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+  section { padding: 48px 0; border-bottom: 1px solid var(--border); }
+  section:last-child { border-bottom: none; }
+  h2 { font-size: 1.6em; margin-bottom: 24px; }
+  h2 .badge {
+    font-size: .5em; background: var(--bg3); padding: 2px 10px; border-radius: 12px;
+    color: var(--text2); margin-left: 8px; vertical-align: middle;
+  }
+  h3 {
+    font-size: 1.1em; margin: 16px 0 8px; padding: 8px 12px;
+    background: var(--bg2); border-radius: 6px; border-left: 3px solid var(--accent);
+    cursor: pointer; display: flex; align-items: center; gap: 8px;
+  }
+  h3 .count { font-size: .75em; color: var(--text2); font-weight: 400; }
+  h3 .arrow { margin-left: auto; transition: transform .2s; font-size: .8em; color: var(--text2); }
+  h3.open .arrow { transform: rotate(90deg); }
+  .cmd-group { display: none; }
+  .cmd-group.open { display: block; }
+
+  /* ── CMD CARD ── */
+  .cmd { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin: 8px 0; }
+  .cmd .name {
+    font-family: 'SF Mono', 'JetBrains Mono', monospace;
+    font-size: 1.1em; font-weight: 600; color: #f0e6d2;
+    background: var(--bg3); display: inline-block;
+    padding: 2px 10px; border-radius: 4px; margin-bottom: 8px;
+  }
+  .cmd .name .sub { color: var(--accent3); font-weight: 400; }
+  .cmd .desc { color: var(--text2); margin-bottom: 8px; font-size: .95em; }
+  .cmd .syntax { background: var(--bg3); padding: 8px 12px; border-radius: 6px; font-family: monospace; font-size: .9em; margin: 6px 0; }
+  .cmd .syntax .kw { color: var(--accent); }
+  .cmd .syntax .arg { color: var(--accent3); }
+  .cmd .syntax .pipe { color: var(--text2); }
+  .cmd .example { color: var(--accent2); font-size: .85em; font-family: monospace; margin-top: 4px; }
+  .cmd .expected { font-size: .85em; color: var(--text2); background: var(--bg3); padding: 8px 12px; border-radius: 6px; margin-top: 6px; }
+  .cmd .expected::before { content: "→ "; color: var(--accent2); }
+  .cmd .note {
+    font-size: .8em; color: var(--danger); margin-top: 6px;
+  }
+
+  .tag { font-size: .7em; padding: 1px 8px; border-radius: 10px; margin-left: 6px; }
+  .tag-new { background: #1a3a2a; color: var(--accent2); }
+  .tag-ai { background: #2d1f3d; color: #c9a0ff; }
+
+  /* ── ABOUT ── */
+  .about-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-top: 16px; }
+  .about-cards .card {
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 20px; text-align: center;
+  }
+  .about-cards .card .icon { font-size: 2em; margin-bottom: 8px; }
+  .about-cards .card h4 { margin-bottom: 4px; }
+  .about-cards .card p { font-size: .85em; color: var(--text2); }
+
+  /* ── SEARCH ── */
+  #search-results { display: none; margin-top: 16px; }
+  #search-results.visible { display: block; }
+  #search-results .result-item {
+    padding: 8px 12px; background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 6px; margin: 4px 0; cursor: pointer;
+  }
+  #search-results .result-item:hover { border-color: var(--accent); }
+  .hl { background: var(--accent3); color: #000; padding: 0 2px; border-radius: 2px; }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 640px) {
+    .hero h1 { font-size: 2em; }
+    .hero .stats { gap: 20px; flex-wrap: wrap; }
+    nav input { width: 140px; }
+    .about-cards { grid-template-columns: 1fr; }
+  }
+
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--bg3); border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<nav>
+  <span class="logo">RAV-REMOTE</span>
+  <a href="#about">Tentang</a>
+  <a href="#features">Fitur</a>
+  <a href="#original">Original</a>
+  <input type="text" id="search" placeholder="Cari fitur..." oninput="doSearch(this.value)">
+</nav>
+
+<!-- ─── HERO ─── -->
+<div class="hero">
+  <h1>RAV-<span>REMOTE</span></h1>
+  <p>Kendalikan laptop Linux dari HP via Telegram/WhatsApp — 93+ fitur siap pakai.</p>
+  <div class="stats">
+    <div><div class="num">93+</div><div class="lbl">Total Fitur</div></div>
+    <div><div class="num">10</div><div class="lbl">Kategori</div></div>
+    <div><div class="num">5</div><div class="lbl">Fase Pengembangan</div></div>
+  </div>
+</div>
+
+<div class="container">
+
+<!-- ─── TENTANG ─── -->
+<section id="about">
+  <h2>Tentang</h2>
+  <p style="color:var(--text2);margin-bottom:16px;">
+    RAV-REMOTE adalah sistem remote control untuk laptop Linux yang dioperasikan melalui bot Telegram atau WhatsApp.
+    Dari HP, kamu bisa menjalankan hampir semua hal di laptop — mulai dari screenshot, kontrol keyboard/mouse,
+    manajemen file, AI automation, hingga kontrol sistem tingkat lanjut.
+  </p>
+  <div class="about-cards">
+    <div class="card"><div class="icon">📱</div><h4>Remote Control</h4><p>Kendalikan laptop dari HP</p></div>
+    <div class="card"><div class="icon">🤖</div><h4>AI Terintegrasi</h4><p>NVIDIA NIM API untuk AI tasks</p></div>
+    <div class="card"><div class="icon">🔒</div><h4>Keamanan</h4><p>Input sanitizer + audit log</p></div>
+    <div class="card"><div class="icon">📦</div><h4>93+ Fitur</h4><p>5 fase pengembangan</p></div>
+  </div>
+</section>
+
+<!-- ─── SEARCH RESULTS ─── -->
+<section id="search-results"><h2>Hasil Pencarian</h2></section>
+
+<!-- ─── FITUR ─── -->
+<section id="features">
+<h2>Semua Fitur <span class="badge">93+</span></h2>
+<p style="color:var(--text2);margin-bottom:16px;">Klik kategori untuk membuka daftar fitur. Setiap fitur bisa langsung dipakai di chat Telegram.</p>
+</section>
+
+</div>
+
+<script>
+const commands = [
+  // ── ORIGINAL: Media & Deteksi ──
+  {n:"!screenshot",a:" [grid]",c:"Media & Deteksi",g:"Original",
+   d:"Ambil screenshot layar. Opsi grid untuk koordinat.",
+   s:'<span class=kw>!screenshot</span> <span class=arg>[grid]</span>',
+   e:'!screenshot\nt!screenshot grid',
+   x:"📸 Screenshot disimpan. atau 📸 Grid koordinat (jika pakai grid)."},
+  {n:"!video",a:" [detik]",c:"Media & Deteksi",g:"Original",
+   d:"Rekam video layar (maks 30 detik).",
+   s:'<span class=kw>!video</span> <span class=arg>[detik]</span>',
+   e:'!video 10',
+   x:"🎥 Merekam layar 10 detik..."},
+  {n:"!webcam",a:"",c:"Media & Deteksi",g:"Original",
+   d:"Ambil foto dari webcam.",
+   s:'<span class=kw>!webcam</span>',
+   e:'!webcam',
+   x:"📷 Foto webcam disimpan."},
+  {n:"!webcamvid",a:" [detik]",c:"Media & Deteksi",g:"Original",
+   d:"Rekam video dari webcam.",
+   s:'<span class=kw>!webcamvid</span> <span class=arg>[detik]</span>',
+   e:'!webcamvid 5',
+   x:"🎥 Video webcam 5 detik."},
+  {n:"!active",a:"",c:"Media & Deteksi",g:"Original",
+   d:"Deteksi jendela aplikasi yang sedang aktif.",
+   s:'<span class=kw>!active</span>',
+   e:'!active',
+   x:"🖥️ Jendela aktif: Firefox — Mozilla Firefox"},
+
+  // ── ORIGINAL: Simulasi Input ──
+  {n:"!click",a:" [x] [y]",c:"Simulasi Input",g:"Original",
+   d:"Simulasi klik mouse kiri di koordinat tertentu.",
+   s:'<span class=kw>!click</span> <span class=arg>[x]</span> <span class=arg>[y]</span>',
+   e:'!click 500 300',
+   x:"🖱️ Klik di (500, 300)."},
+  {n:"!type",a:" [teks]",c:"Simulasi Input",g:"Original",
+   d:"Simulasi ketik teks keyboard.",
+   s:'<span class=kw>!type</span> <span class=arg>[teks]</span>',
+   e:'!type Halo dunia',
+   x:"⌨️ Mengetik: Halo dunia"},
+  {n:"!press",a:" [tombol]",c:"Simulasi Input",g:"Original",
+   d:"Simulasi tekan tombol keyboard (Enter, Tab, Ctrl+C, dll).",
+   s:'<span class=kw>!press</span> <span class=arg>[tombol]</span>',
+   e:'!press Enter',
+   x:"⌨️ Menekan: Enter"},
+
+  // ── ORIGINAL: Navigasi & File ──
+  {n:"!cd",a:" [path]",c:"Navigasi & File",g:"Original",
+   d:"Pindah direktori kerja. Persistent — ingatan lintas sesi.",
+   s:'<span class=kw>!cd</span> <span class=arg>[path]</span>',
+   e:'!cd ~/Documents',
+   x:"📂 Pindah ke /home/rav/Documents"},
+  {n:"!ls",a:" [path]",c:"Navigasi & File",g:"Original",
+   d:"List file dan folder di direktori aktif.",
+   s:'<span class=kw>!ls</span> <span class=arg>[path]</span>',
+   e:'!ls',
+   x:"📄 file1.txt  folder1/  script.py"},
+  {n:"!find",a:" [pattern]",c:"Navigasi & File",g:"Original",
+   d:"Cari file secara rekursif berdasarkan nama.",
+   s:'<span class=kw>!find</span> <span class=arg>[pattern]</span>',
+   e:'!find *.py',
+   x:"🔍 Ditemukan 5 file .py"},
+  {n:"!get",a:" [file]",c:"Navigasi & File",g:"Original",
+   d:"Download/kirim file dari laptop ke HP.",
+   s:'<span class=kw>!get</span> <span class=arg>[filepath]</span>',
+   e:'!get ~/Documents/laporan.pdf',
+   x:"📤 Mengirim laporan.pdf..."},
+  {n:"!read",a:"",c:"Navigasi & File",g:"Original",
+   d:"Baca isi clipboard laptop.",
+   s:'<span class=kw>!read</span>',
+   e:'!read',
+   x:"📋 Clipboard: teks yang disalin"},
+  {n:"!write",a:" [teks]",c:"Navigasi & File",g:"Original",
+   d:"Tulis teks ke clipboard laptop.",
+   s:'<span class=kw>!write</span> <span class=arg>[teks]</span>',
+   e:'!write Halo dunia',
+   x:"📋 Tersalin: Halo dunia"},
+  {n:"!clip sync",a:" [start|stop]",c:"Navigasi & File",g:"Original",
+   d:"Sinkronisasi otomatis clipboard laptop ke HP.",
+   s:'<span class=kw>!clip sync</span> <span class=arg>[start|stop]</span>',
+   e:'!clip sync start',
+   x:"🔄 Sinkron clipboard AKTIF"},
+  {n:"!term",a:"",c:"Navigasi & File",g:"Original",
+   d:"Mode terminal interaktif. Kirim perintah shell langsung.",
+   s:'<span class=kw>!term</span>',
+   e:'!term\nls -la',
+   x:"💻 $ ls -la\n(total 24 files)"},
+
+  // ── ORIGINAL: AI & Otomasi ──
+  {n:"!opencode run",a:' "query"',c:"AI & Otomasi",g:"Original",
+   d:"AI Coding Agent — bikin folder/file/CRUD otomatis pakai AI.",
+   s:'<span class=kw>!opencode run</span> <span class=arg>"query"</span>',
+   e:'!opencode run "buatkan REST API dengan Flask"',
+   x:"🤖 AI Coding Agent bekerja... (butuh API key)"},
+  {n:"!agy",a:" [query]",c:"AI & Otomasi",g:"Original",
+   d:"AI Antigravity CLI — tugas sistem tingkat lanjut via AI.",
+   s:'<span class=kw>!agy</span> <span class=arg>[query]</span>',
+   e:'!agy "optimalkan laptop saya"',
+   x:"🤖 AGY: ... (butuh API key)"},
+  {n:"!testai",a:"",c:"AI & Otomasi",g:"Original",
+   d:"Tes konektivitas AI ke API NVIDIA NIM.",
+   s:'<span class=kw>!testai</span>',
+   e:'!testai',
+   x:"✅ Koneksi AI OK (latensi: 230ms)"},
+
+  // ── ORIGINAL: Sistem & Kontrol ──
+  {n:"!sysinfo",a:"",c:"Sistem & Kontrol",g:"Original",
+   d:"Info lengkap CPU, RAM, Disk, Baterai.",
+   s:'<span class=kw>!sysinfo</span>',
+   e:'!sysinfo',
+   x:"💻 CPU: Intel i7, RAM: 7.8GB, Disk: 232GB"},
+  {n:"!battery",a:"",c:"Sistem & Kontrol",g:"Original",
+   d:"Status detail baterai. Bisa juga: !battery health.",
+   s:'<span class=kw>!battery</span> <span class=arg>[health]</span>',
+   e:'!battery\nt!battery health',
+   x:"🔋 Baterai: 85% (charging)\n🔋 Kesehatan: 78.7% (Cukup)"},
+  {n:"!brightness",a:" [0-100]",c:"Sistem & Kontrol",g:"Original",
+   d:"Atur atau baca kecerahan layar.",
+   s:'<span class=kw>!brightness</span> <span class=arg>[0-100]</span>',
+   e:'!brightness 70',
+   x:"☀️ Kecerahan: 70%"},
+  {n:"!media",a:" [play|pause|next|prev]",c:"Sistem & Kontrol",g:"Original",
+   d:"Kontrol pemutar musik/video aktif (MPRIS).",
+   s:'<span class=kw>!media</span> <span class=arg>[play|pause|next|prev]</span>',
+   e:'!media next',
+   x:"⏭ Lagu berikutnya."},
+  {n:"!notif",a:" [teks]",c:"Sistem & Kontrol",g:"Original",
+   d:"Munculkan notifikasi popup desktop.",
+   s:'<span class=kw>!notif</span> <span class=arg>[teks]</span>',
+   e:'!notif Meeting 5 menit lagi!',
+   x:"🔔 Notifikasi dikirim."},
+  {n:"!tts",a:" [teks] [lang]",c:"Sistem & Kontrol",g:"Original",
+   d:"Text-to-Speech — laptop bicara.",
+   s:'<span class=kw>!tts</span> <span class=arg>[teks]</span> <span class=arg>[lang]</span>',
+   e:'!tts Halo dunia id',
+   x:"🔊 (laptop berbicara)"},
+  {n:"!ping",a:" [host]",c:"Sistem & Kontrol",g:"Original",
+   d:"Cek latensi laptop ke host (default: 8.8.8.8).",
+   s:'<span class=kw>!ping</span> <span class=arg>[host]</span>',
+   e:'!ping google.com',
+   x:"📡 Pong dari google.com: 12ms"},
+  {n:"!speedtest",a:"",c:"Sistem & Kontrol",g:"Original",
+   d:"Uji kecepatan internet laptop.",
+   s:'<span class=kw>!speedtest</span>',
+   e:'!speedtest',
+   x:"🌐 Download: 50 Mbps, Upload: 10 Mbps"},
+  {n:"!win",a:" [minimize|close]",c:"Sistem & Kontrol",g:"Original",
+   d:"Minimalkan atau tutup jendela aplikasi aktif.",
+   s:'<span class=kw>!win</span> <span class=arg>[minimize|close]</span>',
+   e:'!win minimize',
+   x:"🖥️ Jendela diminimalkan."},
+  {n:"!web",a:" [query]",c:"Sistem & Kontrol",g:"Original",
+   d:"Cari di web via Google/DuckDuckGo. Hasil dikirim ke HP.",
+   s:'<span class=kw>!web</span> <span class=arg>[query]</span>',
+   e:'!web berapa 1 dolar ke rupiah',
+   x:"🌐 Hasil pencarian: 1 USD = 16.500 IDR"},
+  {n:"!wifi",a:"",c:"Sistem & Kontrol",g:"Original",
+   d:"Scan jaringan Wi-Fi sekitar.",
+   s:'<span class=kw>!wifi</span>',
+   e:'!wifi',
+   x:"📶 Wi-Fi: Indihome (100%), Telkom (70%)"},
+  {n:"!ports",a:"",c:"Sistem & Kontrol",g:"Original",
+   d:"Tampilkan daftar port listening aktif.",
+   s:'<span class=kw>!ports</span>',
+   e:'!ports',
+   x:"🔌 Port listening: 22 (SSH), 80 (HTTP), 3000"},
+  {n:"!process",a:" [list|kill]",c:"Sistem & Kontrol",g:"Original",
+   d:"Lihat daftar proses atau tutup paksa aplikasi.",
+   s:'<span class=kw>!process</span> <span class=arg>[list|kill &lt;pid/nama&gt;]</span>',
+   e:'!process list\nt!process kill firefox',
+   x:"📋 Proses (top 10): ...\n🗑 Proses firefox dihentikan."},
+  {n:"!launch",a:" [app]",c:"Sistem & Kontrol",g:"Original",
+   d:"Buka aplikasi desktop. Bisa: chrome, vscode, spotify, dll.",
+   s:'<span class=kw>!launch</span> <span class=arg>[nama_aplikasi]</span>',
+   e:'!launch code',
+   x:"🚀 Meluncurkan Visual Studio Code..."},
+  {n:"!apps",a:" [query]",c:"Sistem & Kontrol",g:"Original",
+   d:"Cari aplikasi GUI terinstall.",
+   s:'<span class=kw>!apps</span> <span class=arg>[query]</span>',
+   e:'!apps firefox',
+   x:"📦 Aplikasi: Firefox, Firefox Developer Edition"},
+  {n:"!todo",a:" [add|done|delete|clear]",c:"Sistem & Kontrol",g:"Original",
+   d:"Manajemen to-do list. Opsi 'speak' untuk bersuara.",
+   s:'<span class=kw>!todo</span> <span class=arg>[add|done|delete|clear]</span> <span class=arg>[tugas]</span>',
+   e:'!todo add Belajar Python',
+   x:"✅ Tugas ditambahkan."},
+  {n:"!guard",a:" [on|off]",c:"Sistem & Kontrol",g:"Original",
+   d:"Aktifkan pengawasan gerakan lewat webcam (motion detection).",
+   s:'<span class=kw>!guard</span> <span class=arg>[on|off]</span>',
+   e:'!guard on',
+   x:"📷 Guard AKTIF. Gerakan terdeteksi → notifikasi HP."},
+  {n:"!lock",a:"",c:"Sistem & Kontrol",g:"Original",
+   d:"Kunci layar laptop.",
+   s:'<span class=kw>!lock</span>',
+   e:'!lock',
+   x:"🔒 Laptop dikunci."},
+  {n:"!unlock",a:"",c:"Sistem & Kontrol",g:"Original",
+   d:"Buka kunci layar laptop.",
+   s:'<span class=kw>!unlock</span>',
+   e:'!unlock',
+   x:"🔓 Laptop dibuka."},
+  {n:"!reboot",a:"",c:"Sistem & Kontrol",g:"Original",
+   d:"Restart laptop (butuh konfirmasi).",
+   s:'<span class=kw>!reboot</span>',
+   e:'!reboot',
+   x:"⚠ Yakin? Balas KONFIRMASI untuk restart."},
+  {n:"!run",a:" [script]",c:"Sistem & Kontrol",g:"Original",
+   d:"Jalankan script di laptop secara aman (sandbox).",
+   s:'<span class=kw>!run</span> <span class=arg>[script]</span>',
+   e:'!run echo hello',
+   x:"💻 Output: hello"},
+  {n:"!listen",a:" [detik]",c:"Sistem & Kontrol",g:"Original",
+   d:"Rekam suara sekitar via mikrofon (max 30 detik).",
+   s:'<span class=kw>!listen</span> <span class=arg>[detik]</span>',
+   e:'!listen 5',
+   x:"🎤 Merekam 5 detik..."},
+  {n:"!logout",a:"",c:"Sistem & Kontrol",g:"Original",
+   d:"Keluar dari sesi desktop aktif.",
+   s:'<span class=kw>!logout</span>',
+   e:'!logout',
+   x:"🚪 Logout."},
+  {n:"!help",a:"",c:"Sistem & Kontrol",g:"Original",
+   d:"Tampilkan pesan bantuan semua perintah.",
+   s:'<span class=kw>!help</span>',
+   e:'!help',
+   x:"🤖 Remote Laptop Control — Help\n*(daftar lengkap)*"},
+
+  // ── FASE 1: Produktivitas ──
+  {n:"!focus",a:" [menit]",c:"Produktivitas",g:"Fase 1",t:"new",
+   d:"Mode fokus dengan Pomodoro timer + blokir situs (via /etc/hosts).",
+   s:'<span class=kw>!focus</span> <span class=arg>[on|off|menit]</span>',
+   e:'!focus 25',
+   x:"🍅 Mode fokus 25 menit dimulai."},
+  {n:"!workspace",a:" [save|load|list|delete]",c:"Produktivitas",g:"Fase 1",t:"new",
+   d:"Simpan/muat seluruh sesi kerja (jendela + folder + aplikasi).",
+   s:'<span class=kw>!workspace</span> <span class=arg>[save|load|list|delete]</span> <span class=arg>[nama]</span>',
+   e:'!workspace save dev',
+   x:"💾 Workspace 'dev' disimpan (15 aplikasi)."},
+  {n:"!calendar",a:" [today|next|list|join]",c:"Produktivitas",g:"Fase 1",t:"new",
+   d:"Integrasi Google Calendar. Butuh setup OAuth (credentials.json).",
+   s:'<span class=kw>!calendar</span> <span class=arg>[today|next|list|join]</span>',
+   e:'!calendar today',
+   x:"📅 Jadwal hari ini: ...\n⚠ Butuh setup OAuth"},
+  {n:"!quicknote",a:" [judul] [isi]",c:"Produktivitas",g:"Fase 1",t:"new",
+   d:"Catatan markdown cepat, disimpan ke ~/Documents/RAV-Notes/.",
+   s:'<span class=kw>!quicknote</span> <span class=arg>[judul]</span> <span class=arg>[isi]</span>',
+   e:'!quicknote Ide Bisnis Jualan online',
+   x:"📝 Catatan disimpan: Ide-Bisnis.md"},
+  {n:"!browser",a:" [new|search|scroll|refresh|close]",c:"Produktivitas",g:"Fase 1",t:"new",
+   d:"Kontrol browser dari HP: buka, cari, scroll, refresh, tutup.",
+   s:'<span class=kw>!browser</span> <span class=arg>[new|search|scroll|refresh|close]</span> <span class=arg>[args]</span>',
+   e:'!browser open https://google.com',
+   x:"🌐 Membuka https://google.com..."},
+  {n:"!daily",a:" [yesterday]",c:"Produktivitas",g:"Fase 1",t:"new",
+   d:"Laporan aktivitas laptop 24 jam terakhir (CPU, RAM, proses).",
+   s:'<span class=kw>!daily</span> <span class=arg>[yesterday]</span>',
+   e:'!daily',
+   x:"📊 Laporan Harian:\nCPU: 45%, RAM: 6.1GB, Proses: 312"},
+  {n:"!reminder",a:" [add|list|delete]",c:"Produktivitas",g:"Fase 1",t:"new",
+   d:"Pengingat dengan notifikasi desktop + Telegram.",
+   s:'<span class=kw>!reminder</span> <span class=arg>[add|list|delete]</span> <span class=arg>[teks]</span> <span class=arg>[waktu]</span>',
+   e:'!reminder add Meeting 10s',
+   x:"⏰ Pengingat 'Meeting' dalam 10s."},
+  {n:"!task",a:" [add|list|done|delete]",c:"Produktivitas",g:"Fase 1",t:"new",
+   d:"Manajemen tugas terpusat (lokal, persistent).",
+   s:'<span class=kw>!task</span> <span class=arg>[add|list|done|delete]</span> <span class=arg>[tugas]</span>',
+   e:'!task add Belajar Flask',
+   x:"✅ Tugas 'Belajar Flask' ditambahkan."},
+  {n:"!meeting mode",a:" [on|off]",c:"Produktivitas",g:"Fase 1",t:"new",
+   d:"Persiapan meeting: mute notifikasi, buka aplikasi meeting, mode Jangan Ganggu.",
+   s:'<span class=kw>!meeting mode</span> <span class=arg>[on|off]</span> <span class=arg>[nama]</span>',
+   e:'!meeting mode on Daily Standup',
+   x:"🎯 Mode Meeting AKTIF: Daily Standup"},
+  {n:"!custom alias",a:" [nama] [perintah]",c:"Produktivitas",g:"Fase 1",t:"new",
+   d:"Buat alias perintah custom sendiri. Simpan di ~/.config/rav-remote/aliases.json.",
+   s:'<span class=kw>!custom alias</span> <span class=arg>[nama]</span> <span class=arg>[perintah]</span>',
+   e:'!custom alias st !system dash',
+   x:"✅ Alias 'st' -> '!system dash' tersimpan."},
+
+  // ── FASE 2: AI & Automation ──
+  {n:"!ai work",a:" [perintah]",c:"AI & Automation",g:"Fase 2",t:"new ai",
+   d:"AI assistant produktivitas — outline, planning, task breakdown.",
+   s:'<span class=kw>!ai work</span> <span class=arg>[perintah]</span>',
+   e:'!ai work buat outline aplikasi todo',
+   x:"🤖 AI Work:\n1. Setup Flask\n2. Buat model\n3. Routes\n..."},
+  {n:"!ai write",a:" [tipe] [topik]",c:"AI & Automation",g:"Fase 2",t:"new ai",
+   d:"Buat draft dokumen/email, presentasi, atau laporan via AI.",
+   s:'<span class=kw>!ai write</span> <span class=arg>[tipe]</span> <span class=arg>[topik]</span>',
+   e:'!ai write email lamaran kerja',
+   x:"✍️ Draft email:\nKepada Yth. HRD ..."},
+  {n:"!ai automate",a:" [deskripsi]",c:"AI & Automation",g:"Fase 2",t:"new ai",
+   d:"Buat automation script dari deskripsi natural language.",
+   s:'<span class=kw>!ai automate</span> <span class=arg>[deskripsi]</span>',
+   e:'!ai automate backup folder Documents tiap jam',
+   x:"🤖 Script:\n#!/bin/bash\nrsync -av ~/Documents/ ~/Backup/"},
+  {n:"!ai summarize",a:" [target]",c:"AI & Automation",g:"Fase 2",t:"new ai",
+   d:"Ringkaskan file atau folder via AI.",
+   s:'<span class=kw>!ai summarize</span> <span class=arg>[target]</span>',
+   e:'!ai summarize ~/Documents/laporan.pdf',
+   x:"📝 Ringkasan:\nDokumen ini membahas tentang..."},
+  {n:"!ai research",a:" [topik]",c:"AI & Automation",g:"Fase 2",t:"new ai",
+   d:"Riset topik via AI; hasil disimpan ke folder Research/.",
+   s:'<span class=kw>!ai research</span> <span class=arg>[topik]</span> <span class=arg>[depth]</span>',
+   e:'!ai research machine learning dasar',
+   x:"🔬 Research disimpan ke Research/machine-learning-dasar.md"},
+  {n:"!ai insight",a:" [daily|weekly|monthly]",c:"AI & Automation",g:"Fase 2",t:"new ai",
+   d:"Analisis pola penggunaan laptop — CPU, RAM, kebiasaan.",
+   s:'<span class=kw>!ai insight</span> <span class=arg>[daily|weekly|monthly]</span>',
+   e:'!ai insight daily',
+   x:"📊 Insight Harian:\nCPU peak 14:00, rata-rata 45%"},
+  {n:"!smart clipboard",a:" [on|off|history]",c:"AI & Automation",g:"Fase 2",t:"new",
+   d:"Smart clipboard — deteksi otomatis tipe data (URL/email/JSON/phone).",
+   s:'<span class=kw>!smart clipboard</span> <span class=arg>[on|off|history|copy]</span> <span class=arg>[teks]</span>',
+   e:'!smart clipboard copy test@email.com',
+   x:"📋 Disalin: test@email.com (email)"},
+  {n:"!macro",a:" [record|play|save|list|delete]",c:"AI & Automation",g:"Fase 2",t:"new",
+   d:"Rekam & putar aksi keyboard/mouse (xdotool).",
+   s:'<span class=kw>!macro</span> <span class=arg>[record|play|save|list|delete]</span> <span class=arg>[nama]</span>',
+   e:'!macro record test\n!macro play test',
+   x:"⏺ Merekam...\n▶ Memainkan macro 'test'"},
+  {n:"!schedule",a:" add/list/delete",c:"AI & Automation",g:"Fase 2",t:"new",
+   d:"Jadwalkan perintah otomatis. Background check tiap 30 detik.",
+   s:'<span class=kw>!schedule add</span> <span class=arg>&lt;perintah&gt;</span> <span class=arg>&lt;waktu&gt;</span>',
+   e:'!schedule add !dash 10s',
+   x:"⏰ Terjadwal: ID 1, !dash dalam 10s"},
+  {n:"!voice cmd",a:" [on|off]",c:"AI & Automation",g:"Fase 2",t:"new",
+   d:"Aktifkan voice command dari HP. Laptop dengar perintah suara.",
+   s:'<span class=kw>!voice cmd</span> <span class=arg>[on|off]</span>',
+   e:'!voice cmd on',
+   x:"🎤 Voice command AKTIF."},
+
+  // ── FASE 3: File, Sync & Data ──
+  {n:"!sync",a:" [folder] [service]",c:"File, Sync & Data",g:"Fase 3",t:"new",
+   d:"Sinkronisasi folder dua arah ke cloud (local copy / rclone GDrive).",
+   s:'<span class=kw>!sync</span> <span class=arg>[folder]</span> <span class=arg>[service]</span>',
+   e:'!sync ~/Documents local',
+   x:"🔄 Sync ~/Documents selesai."},
+  {n:"!quick upload",a:"",c:"File, Sync & Data",g:"Fase 3",t:"new",
+   d:"Tampilkan folder upload — kirim file dari HP ke sini.",
+   s:'<span class=kw>!quick upload</span>',
+   e:'!quick upload',
+   x:"📁 Folder upload: ~/Downloads/rav-remote"},
+  {n:"!recent",a:" [files|folders]",c:"File, Sync & Data",g:"Fase 3",t:"new",
+   d:"Daftar file/folder terbaru di laptop.",
+   s:'<span class=kw>!recent</span> <span class=arg>[files|folders]</span> <span class=arg>[jumlah]</span>',
+   e:'!recent files 5',
+   x:"📂 5 file terbaru:\n1. laporan.pdf\n2. ..."},
+  {n:"!search content",a:" [keyword]",c:"File, Sync & Data",g:"Fase 3",t:"new",
+   d:"Cari teks di dalam file (grep-like). ",
+   s:'<span class=kw>!search content</span> <span class=arg>[keyword]</span> <span class=arg>[folder]</span>',
+   e:'!search content TODO ~/Projects',
+   x:"🔍 Ditemukan 12 file mengandung 'TODO'"},
+  {n:"!convert",a:" [file] [format]",c:"File, Sync & Data",g:"Fase 3",t:"new",
+   d:"Konversi format file via pandoc (dokumen) atau ffmpeg (media).",
+   s:'<span class=kw>!convert</span> <span class=arg>[file]</span> <span class=arg>[format]</span>',
+   e:'!convert laporan.docx pdf',
+   x:"📄 laporan.pdf berhasil dibuat."},
+  {n:"!backup",a:" [folder] [type]",c:"File, Sync & Data",g:"Fase 3",t:"new",
+   d:"Backup folder ke penyimpanan aman (quick=copy, full=archive).",
+   s:'<span class=kw>!backup</span> <span class=arg>[folder]</span> <span class=arg>[quick|full]</span>',
+   e:'!backup ~/Documents quick',
+   x:"💾 Backup ~/Documents selesai (256 MB)."},
+  {n:"!organize",a:" [folder] [cara]",c:"File, Sync & Data",g:"Fase 3",t:"new",
+   d:"Organisir file otomatis ke subfolder (by type atau by date).",
+   s:'<span class=kw>!organize</span> <span class=arg>[folder]</span> <span class=arg>[by type|date]</span>',
+   e:'!organize ~/Downloads by type',
+   x:"📂 23 file diorganisir ke subfolder."},
+  {n:"!file watcher",a:" [on|off|status]",c:"File, Sync & Data",g:"Fase 3",t:"new",
+   d:"Pantau perubahan folder secara realtime (threading).",
+   s:'<span class=kw>!file watcher</span> <span class=arg>[on|off|status]</span> <span class=arg>[folder]</span>',
+   e:'!file watcher on ~/Documents',
+   x:"👀 File watcher AKTIF untuk ~/Documents"},
+  {n:"!version",a:" [commit|history|revert]",c:"File, Sync & Data",g:"Fase 3",t:"new",
+   d:"Versioning file lokal — snapshot tiap versi (max 20 per file).",
+   s:'<span class=kw>!version</span> <span class=arg>[commit|history|revert|status]</span> <span class=arg>[file]</span>',
+   e:'!version commit laporan.docx',
+   x:"💾 Versi 3 laporan.docx disimpan."},
+  {n:"!clean",a:" [temp|cache|duplicates|all]",c:"File, Sync & Data",g:"Fase 3",t:"new",
+   d:"Bersihkan sampah disk: temporary files, cache, duplikat.",
+   s:'<span class=kw>!clean</span> <span class=arg>[temp|cache|duplicates|all]</span>',
+   e:'!clean temp',
+   x:"🧹 128 MB sampah dibersihkan."},
+
+  // ── FASE 4: System Enhancement ──
+  {n:"!volume",a:" [level|up|down|mute|app]",c:"System Enhancement",g:"Fase 4",t:"new",
+   d:"Kontrol volume global atau per-aplikasi (butuh pulsectl).",
+   s:'<span class=kw>!volume</span> <span class=arg>[app|global]</span> <span class=arg>[level|up|down|mute]</span>',
+   e:'!volume 80\nt!volume up\nt!volume chrome 60',
+   x:"🔊 Volume global diatur ke 80%\n🔊 Volume naik 5%\n🔊 Volume chrome diatur ke 60%"},
+  {n:"!power",a:" [performance|balanced|saver]",c:"System Enhancement",g:"Fase 4",t:"new",
+   d:"Ganti profil daya laptop (power-profiles-daemon).",
+   s:'<span class=kw>!power</span> <span class=arg>[performance|balanced|saver]</span>',
+   e:'!power performance',
+   x:"🔋 Profil daya: performance"},
+  {n:"!multi monitor",a:" [list|switch|arrange]",c:"System Enhancement",g:"Fase 4",t:"new",
+   d:"Kelola monitor ganda via xrandr.",
+   s:'<span class=kw>!multi monitor</span> <span class=arg>[list|switch|arrange]</span> <span class=arg>[args]</span>',
+   e:'!multi monitor switch HDMI-1',
+   x:"🖥️ Beralih ke HDMI-1"},
+  {n:"!sleep",a:" [delay]",c:"System Enhancement",g:"Fase 4",t:"new",
+   d:"Tidurkan laptop (systemctl suspend) — ⚠ bot mati.",
+   s:'<span class=kw>!sleep</span> <span class=arg>[delay]</span>',
+   e:'!sleep 5m',
+   x:"💤 Laptop akan tidur dalam 5 menit..."},
+  {n:"!wake",a:" [waktu]",c:"System Enhancement",g:"Fase 4",t:"new",
+   d:"Jadwalkan bangun laptop otomatis via rtcwake.",
+   s:'<span class=kw>!wake</span> <span class=arg>[waktu]</span>',
+   e:'!wake 07:30',
+   x:"⏰ Wake dijadwalkan: 07:30"},
+  {n:"!quick app",a:" [nama]",c:"System Enhancement",g:"Fase 4",t:"new",
+   d:"Buka aplikasi cepat via alias. Sama seperti !launch.",
+   s:'<span class=kw>!quick app</span> <span class=arg>[nama]</span>',
+   e:'!quick app firefox',
+   x:"🚀 Meluncurkan firefox..."},
+  {n:"!battery health",a:"",c:"System Enhancement",g:"Fase 4",t:"new",
+   d:"Cek kesehatan baterai detail: model, kapasitas, siklus, rekomendasi.",
+   s:'<span class=kw>!battery health</span>',
+   e:'!battery health',
+   x:"🔋 Kesehatan Baterai:\nModel: A9, Kapasitas: 100%, Kesehatan: 78.7%, Siklus: 6\n💡 Rekomendasi: Perhatikan pemakaian."},
+  {n:"!night mode",a:" [on|off]",c:"System Enhancement",g:"Fase 4",t:"new",
+   d:"Mode malam: dark mode GNOME + blue light filter (redshift/gammastep).",
+   s:'<span class=kw>!night mode</span> <span class=arg>[on|off]</span>',
+   e:'!night mode on',
+   x:"🌙 Night Mode AKTIF: Dark mode + blue light filter."},
+  {n:"!window",a:" [arrange|snap|minimize|close]",c:"System Enhancement",g:"Fase 4",t:"new",
+   d:"Atur jendela: arrange cascade/tile, snap, minimize all, close all.",
+   s:'<span class=kw>!window</span> <span class=arg>[arrange|snap|minimize all|close all]</span>',
+   e:'!window snap left',
+   x:"🪟 Jendela di-snap ke kiri."},
+  {n:"!hotkey",a:" [create|list|delete]",c:"System Enhancement",g:"Fase 4",t:"new",
+   d:"Buat/kelola hotkey global (registry JSON, belum binding sistem).",
+   s:'<span class=kw>!hotkey</span> <span class=arg>[create|list|delete]</span> <span class=arg>[nama]</span> <span class=arg>[key]</span>',
+   e:'!hotkey create screenshot Ctrl+Shift+S',
+   x:"⌨️ Hotkey 'screenshot' -> Ctrl+Shift+S"},
+  {n:"!launch advanced",a:" [app] [args]",c:"System Enhancement",g:"Fase 4",t:"new",
+   d:"Luncurkan aplikasi dengan parameter/argumen tambahan.",
+   s:'<span class=kw>!launch advanced</span> <span class=arg>[app]</span> <span class=arg>[args]</span>',
+   e:'!launch advanced firefox --private-window',
+   x:"🚀 Meluncurkan firefox --private-window..."},
+
+  // ── FASE 5: Advanced & Pro ──
+  {n:"!time track",a:" [start|stop|status|report]",c:"Advanced & Pro",g:"Fase 5",t:"new",
+   d:"Lacak waktu kerja per project. Data tersimpan di JSON.",
+   s:'<span class=kw>!time track</span> <span class=arg>[start|stop|status|report]</span> <span class=arg>[project]</span>',
+   e:'!time track start Coding\nt!time track stop',
+   x:"⏱️ Tracking dimulai untuk 'Coding'.\n⏱️ 'Coding' selesai. Durasi: 02:15:30."},
+  {n:"!session",a:" [save|list|restore|delete]",c:"Advanced & Pro",g:"Fase 5",t:"new",
+   d:"Simpan/pulihkan session aplikasi (daftar proses aktif).",
+   s:'<span class=kw>!session</span> <span class=arg>[save|list|restore|delete]</span> <span class=arg>[name]</span>',
+   e:'!session save work',
+   x:"💾 Session 'work' disimpan (24 proses)."},
+  {n:"!share screen",a:" [fullscreen|area]",c:"Advanced & Pro",g:"Fase 5",t:"new",
+   d:"Ambil screenshot layar (fullscreen atau pilih area).",
+   s:'<span class=kw>!share screen</span> <span class=arg>[fullscreen|area]</span>',
+   e:'!share screen\nt!share screen area',
+   x:"📸 Screenshot: screenshot_20260622_150000.png (245 KB)"},
+  {n:"!multi device",a:" [register|list|delete|send]",c:"Advanced & Pro",g:"Fase 5",t:"new",
+   d:"Kelola multi-perangkat: daftarkan device lain dan kirim perintah.",
+   s:'<span class=kw>!multi device</span> <span class=arg>[register|list|delete|send]</span> <span class=arg>[name]</span> <span class=arg>[ip/cmd]</span>',
+   e:'!multi device register laptop2 192.168.1.100',
+   x:"✅ Device 'laptop2' terdaftar."},
+  {n:"!profile",a:" [create|list|apply|delete]",c:"Advanced & Pro",g:"Fase 5",t:"new",
+   d:"Profile pengguna — simpan daftar apps + power setting + tema.",
+   s:'<span class=kw>!profile</span> <span class=arg>[create|list|apply|delete]</span> <span class=arg>[name]</span> <span class=arg>[apps]</span>',
+   e:'!profile create coding code firefox',
+   x:"✅ Profile 'coding' dibuat (apps: 2, power: balanced)."},
+  {n:"!dash",a:"",c:"Advanced & Pro",g:"Fase 5",t:"new",
+   d:"Dashboard sistem realtime: CPU, RAM, Disk, Uptime, Network, Baterai.",
+   s:'<span class=kw>!dash</span>',
+   e:'!dash',
+   x:"📊 RAV DASHBOARD\nCPU: 45%, RAM: 4.2/7.8GB, Disk: 42/232GB, Uptime: 40j 39m"},
+  {n:"!activity log",a:" [days] [--filter=]",c:"Advanced & Pro",g:"Fase 5",t:"new",
+   d:"Lihat log aktivitas laptop berdasarkan hari/filter aksi.",
+   s:'<span class=kw>!activity log</span> <span class=arg>[days]</span> <span class=arg>[--filter=aksi]</span>',
+   e:'!activity log 7',
+   x:"📋 Log aktivitas 7 hari:\n2026-06-22 15:50 [COMMAND] !dash\n..."},
+  {n:"!vpn",a:" [status|connect|disconnect]",c:"Advanced & Pro",g:"Fase 5",t:"new",
+   d:"Kontrol VPN via NetworkManager (nmcli).",
+   s:'<span class=kw>!vpn</span> <span class=arg>[status|connect|disconnect]</span> <span class=arg>[name]</span>',
+   e:'!vpn connect office',
+   x:"🔒 VPN 'office' terhubung."},
+  {n:"!tunnel",a:" [create|list|start|delete]",c:"Advanced & Pro",g:"Fase 5",t:"new",
+   d:"Tunnel SSH — forward port lokal ke remote server.",
+   s:'<span class=kw>!tunnel</span> <span class=arg>[create|list|start|delete]</span> <span class=arg>[name]</span> <span class=arg>[remote]</span> <span class=arg>[port]</span>',
+   e:'!tunnel create dev example.com 8080',
+   x:"✅ Tunnel 'dev' dibuat: example.com:8080 -> local:8080"},
+  {n:"!ai agent",a:" [task]",c:"Advanced & Pro",g:"Fase 5",t:"new ai",
+   d:"AI Agent untuk tugas kompleks multi-langkah via NIM API.",
+   s:'<span class=kw>!ai agent</span> <span class=arg>[task]</span>',
+   e:'!ai agent analisis penggunaan CPU dan RAM serta beri saran optimasi',
+   x:"🤖 AI Agent:\nCPU: 70%... Saran: tutup aplikasi yang tidak dipakai."},
+];
+
+// ── Render ──
+function render() {
+  const cats = {};
+  commands.forEach(c => {
+    if (!cats[c.c]) cats[c.c] = [];
+    cats[c.c].push(c);
+  });
+
+  const container = document.getElementById('features');
+  const catsSorted = Object.keys(cats).sort((a,b) => {
+    const order = ['Media & Deteksi','Simulasi Input','Navigasi & File','AI & Otomasi','Sistem & Kontrol',
+      'Produktivitas','AI & Automation','File, Sync & Data','System Enhancement','Advanced & Pro'];
+    return order.indexOf(a) - order.indexOf(b);
+  });
+
+  catsSorted.forEach(cat => {
+    const cmds = cats[cat];
+    const phase = cmds[0].g;
+    const sec = document.createElement('section');
+    sec.id = 'cat-' + cat.replace(/[^a-z0-9]/gi,'');
+    sec.innerHTML = `<h2 style="margin-top:24px">${cat} <span class="badge">${cmds.length}</span></h2>`;
+
+    const allOriginals = cmds.filter(c => c.g === 'Original');
+    const allNews = cmds.filter(c => c.g !== 'Original');
+
+    [allOriginals, allNews].forEach(group => {
+      if (!group.length) return;
+      const h3 = document.createElement('h3');
+      const label = group[0].g === 'Original' ? 'Original' : 'Baru';
+      const count = group.length;
+      h3.innerHTML = `${label} <span class="count">${count} fitur</span> <span class="arrow">▶</span>`;
+      h3.onclick = () => { h3.classList.toggle('open'); h3.nextElementSibling.classList.toggle('open'); };
+      sec.appendChild(h3);
+
+      const div = document.createElement('div');
+      div.className = 'cmd-group';
+      group.forEach(c => {
+        const card = document.createElement('div');
+        card.className = 'cmd';
+        card.dataset.search = `${c.n} ${c.d} ${c.c}`.toLowerCase();
+        const tags = (c.t === 'new' ? '<span class="tag tag-new">Baru</span>' : '') +
+                     (c.t === 'new ai' ? '<span class="tag tag-new">Baru</span> <span class="tag tag-ai">AI</span>' : '');
+        card.innerHTML = `
+          <div class="name">${c.n}<span class="sub">${c.a || ''}</span> ${tags}</div>
+          <div class="desc">${c.d}</div>
+          <div class="syntax">${c.s}</div>
+          <div class="example">▶ ${c.e}</div>
+          <div class="expected">${c.x}</div>
+        `;
+        div.appendChild(card);
+      });
+      sec.appendChild(div);
+    });
+    container.appendChild(sec);
+  });
+}
+
+// ── Search ──
+function doSearch(q) {
+  const ql = q.toLowerCase().trim();
+  const results = document.getElementById('search-results');
+  results.innerHTML = '<h2>Hasil Pencarian</h2>';
+  results.classList.remove('visible');
+  if (!ql) return;
+
+  const found = commands.filter(c => `${c.n} ${c.d} ${c.c}`.toLowerCase().includes(ql));
+  if (!found.length) {
+    results.innerHTML += '<p style="color:var(--text2)">Tidak ditemukan.</p>';
+    results.classList.add('visible');
+    return;
+  }
+  found.forEach(c => {
+    const div = document.createElement('div');
+    div.className = 'result-item';
+    div.innerHTML = `<strong>${c.n}</strong> <span style="color:var(--text2)">— ${c.d}</span>`;
+    div.onclick = () => {
+      document.querySelectorAll('.cmd').forEach(el => el.style.borderColor = '');
+      document.querySelectorAll('.cmd-group').forEach(el => el.classList.add('open'));
+      document.querySelectorAll('h3').forEach(el => el.classList.add('open'));
+      const cards = document.querySelectorAll('.cmd');
+      for (const card of cards) {
+        if (card.dataset.search && card.dataset.search.includes(ql)) {
+          card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          card.style.borderColor = 'var(--accent3)';
+          break;
+        }
+      }
+    };
+    results.appendChild(div);
+  });
+  results.classList.add('visible');
+}
+
+render();
+console.log('RAV-REMOTE Docs loaded —', commands.length, 'commands');
+</script>
+</body>
+</html>
