@@ -397,7 +397,20 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, ov
             content = result.get("content")
             
             if res_type == "text":
-                await update.message.reply_text(f"✅ <b>Hasil:</b>\n<code>{escape(content)}</code>", parse_mode="HTML")
+                MAX_MSG = 4000
+                if len(content) > MAX_MSG:
+                    lines = content.split('\n')
+                    chunk = ''
+                    for line in lines:
+                        if chunk and len(chunk) + len(line) + 1 > MAX_MSG:
+                            await update.message.reply_text(chunk.strip())
+                            chunk = line + '\n'
+                        else:
+                            chunk += line + '\n'
+                    if chunk.strip():
+                        await update.message.reply_text(chunk.strip())
+                else:
+                    await update.message.reply_text(f"✅ <b>Hasil:</b>\n<code>{escape(content)}</code>", parse_mode="HTML")
             elif res_type == "image":
                 await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=constants.ChatAction.UPLOAD_PHOTO)
                 import base64
