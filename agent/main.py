@@ -4,6 +4,7 @@ Jalankan di laptop yang ingin dikontrol
 """
 import os
 import base64
+import asyncio
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -75,7 +76,14 @@ def check_system_dependencies():
 async def lifespan(app: FastAPI):
     logger.info("🚀 Laptop Agent starting...")
     check_system_dependencies()
+    from agent.command_handler import clipboard_sync_loop
+    sync_task = asyncio.create_task(clipboard_sync_loop())
     yield
+    sync_task.cancel()
+    try:
+        await sync_task
+    except asyncio.CancelledError:
+        pass
     logger.info("Laptop Agent shutdown")
 
 app = FastAPI(
@@ -97,10 +105,19 @@ async def heartbeat(_=Depends(verify_api_key)):
     # Check for anomalies and battery
     anomalies = watchdog.check_system_anomalies(metrics["cpu"], metrics["ram"])
     battery = battery_monitor.get_alerts()
+    
+    from agent.command_handler import clipboard_alerts
+    clip_alerts = list(clipboard_alerts)
+    clipboard_alerts.clear()
+    
+    from agent.guard import guard_alerts
+    g_alerts = list(guard_alerts)
+    guard_alerts.clear()
+    
     return {
         "status": "ONLINE",
         "metrics": metrics,
-        "alerts": anomalies + battery
+        "alerts": anomalies + battery + clip_alerts + g_alerts
     }
 
 @app.get("/system/alerts")
@@ -109,7 +126,16 @@ async def get_alerts(_=Depends(verify_api_key)):
     metrics = sys_monitor.get_metrics()
     anomalies = watchdog.check_system_anomalies(metrics["cpu"], metrics["ram"])
     battery = battery_monitor.get_alerts()
-    return {"alerts": anomalies + battery}
+    
+    from agent.command_handler import clipboard_alerts
+    clip_alerts = list(clipboard_alerts)
+    clipboard_alerts.clear()
+    
+    from agent.guard import guard_alerts
+    g_alerts = list(guard_alerts)
+    guard_alerts.clear()
+    
+    return {"alerts": anomalies + battery + clip_alerts + g_alerts}
 
 
 @app.post("/auth/verify-otp")
@@ -207,6 +233,12 @@ async def execute_command(
                 "data": base64.b64encode(result["data"]).decode(),
                 "filename": result.get("filename", "screen_record.mp4"),
                 "mimetype": result.get("mimetype", "video/mp4"),
+            }}
+        elif res_type == "audio":
+            return {"type": "audio", "content": {
+                "data": base64.b64encode(result["data"]).decode(),
+                "filename": result.get("filename", "audio.mp3"),
+                "mimetype": result.get("mimetype", "audio/mpeg"),
             }}
         elif res_type == "document" or ("filename" in result and "data" in result):
             return {"type": "document", "content": {

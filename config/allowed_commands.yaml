@@ -130,14 +130,128 @@ safe_commands:
     description: "AI Agent for coding and task automation"
     requires_confirmation: false
     sandbox_required: false
-  gemini:
-    description: "Gemini CLI for AI assistance and coding"
+  agy:
+    description: "Alias for antigravity CLI"
     requires_confirmation: false
     sandbox_required: false
-  antigravity:
-    description: "Antigravity CLI for advanced AI tasks"
+  read:
+    description: "Read clipboard shortcut"
     requires_confirmation: false
     sandbox_required: false
+  write:
+    description: "Write clipboard shortcut"
+    requires_confirmation: false
+    sandbox_required: false
+  brightness:
+    description: "Mengatur atau membaca kecerahan layar"
+    requires_confirmation: false
+    sandbox_required: false
+  media:
+    description: "Mengontrol pemutar musik/video aktif"
+    requires_confirmation: false
+    sandbox_required: false
+  battery:
+    description: "Membaca informasi baterai laptop"
+    requires_confirmation: false
+    sandbox_required: false
+  notif:
+    description: "Mengirim pesan popup desktop notification ke layar"
+    requires_confirmation: false
+    sandbox_required: false
+  process:
+    description: "Melihat daftar proses atau menghentikan paksa aplikasi"
+    requires_confirmation: false
+    sandbox_required: false
+  listen:
+    description: "Merekam suara sekitar"
+    requires_confirmation: false
+    sandbox_required: false
+  audio:
+    description: "Alias listen"
+    requires_confirmation: false
+    sandbox_required: false
+  click:
+    description: "Simulasi klik mouse kiri"
+    requires_confirmation: false
+    sandbox_required: false
+  type:
+    description: "Simulasi ketik teks"
+    requires_confirmation: false
+    sandbox_required: false
+  press:
+    description: "Simulasi tekan tombol"
+    requires_confirmation: false
+    sandbox_required: false
+  active:
+    description: "Deteksi jendela aktif"
+    requires_confirmation: false
+    sandbox_required: false
+  window:
+    description: "Alias active"
+    requires_confirmation: false
+    sandbox_required: false
+  find:
+    description: "Pencarian file rekursif"
+    requires_confirmation: false
+    sandbox_required: false
+  search:
+    description: "Alias find"
+    requires_confirmation: false
+    sandbox_required: false
+  tts:
+    description: "Text-to-Speech pada speaker laptop"
+    requires_confirmation: false
+    sandbox_required: false
+  ping:
+    description: "Memeriksa latensi ke host"
+    requires_confirmation: false
+    sandbox_required: false
+  speedtest:
+    description: "Uji kecepatan internet"
+    requires_confirmation: false
+    sandbox_required: false
+  window_control:
+    description: "Kontrol jendela aplikasi aktif (minimize/close)"
+    requires_confirmation: false
+    sandbox_required: false
+  win:
+    description: "Alias window_control"
+    requires_confirmation: false
+    sandbox_required: false
+  web:
+    description: "Pencarian web (Google/DuckDuckGo)"
+    requires_confirmation: false
+    sandbox_required: false
+  google:
+    description: "Alias web"
+    requires_confirmation: false
+    sandbox_required: false
+  wifi:
+    description: "Memindai jaringan Wi-Fi sekitar"
+    requires_confirmation: false
+    sandbox_required: false
+  ports:
+    description: "Daftar port aktif (listening)"
+    requires_confirmation: false
+    sandbox_required: false
+  launch:
+    description: "Meluncurkan aplikasi desktop secara background"
+    requires_confirmation: false
+    sandbox_required: false
+  todo:
+    description: "Mengelola daftar tugas (TODO) secara persisten"
+    requires_confirmation: false
+    sandbox_required: false
+  apps:
+    description: "Menampilkan daftar aplikasi GUI/Desktop yang terinstall"
+    requires_confirmation: false
+    sandbox_required: false
+  guard:
+    description: "Mengaktifkan/menonaktifkan mode pengawasan kamera (Webcam Guard)"
+    requires_confirmation: false
+    sandbox_required: false
+
+
 
 blocked_patterns:
   - "rm -rf"

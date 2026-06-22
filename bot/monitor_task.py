@@ -26,7 +26,9 @@ TIMEOUT_OFFLINE = 180    # 3 menit tanpa heartbeat
 class MonitorTask:
     def __init__(self, app: Application):
         self.app = app
-        self.allowed_users = set(os.environ.get("ALLOWED_USER_IDS", "").split(","))
+        raw_ids = os.environ.get("ALLOWED_USER_IDS", "")
+        self.allowed_users = set(uid.strip() for uid in raw_ids.split(",") if uid.strip())
+        logger.info(f"MonitorTask initialized for users: {self.allowed_users}")
 
     async def update_heartbeat(self, agent_id: str, metrics: dict):
         """Update last seen dan cek transisi state."""
@@ -80,10 +82,104 @@ class MonitorTask:
         for msg in alerts_to_send:
             await self._broadcast_alert(msg)
 
+    async def _check_todo_deadlines_once(self):
+        """Memeriksa tenggat waktu todo dan mengirimkan pengingat jika sudah lewat/waktunya."""
+        import json
+        import subprocess
+        from datetime import datetime
+        
+        todo_file = "todo.json"
+        if not os.path.exists(todo_file):
+            return
+
+        try:
+            with open(todo_file, "r") as f:
+                todos = json.load(f)
+        except Exception:
+            return
+
+        updated = False
+        now = datetime.now()
+
+        for item in todos:
+            if not item.get("done", False) and item.get("deadline") and not item.get("reminded", False):
+                try:
+                    deadline_dt = datetime.strptime(item["deadline"], "%Y-%m-%d %H:%M")
+                    if now >= deadline_dt:
+                        item["reminded"] = True
+                        updated = True
+                        
+                        task_desc = item["task"]
+                        deadline_str = item["deadline"]
+                        
+                        # 1. Kirim alert teks ke Telegram
+                        msg = (
+                            f"⏱️ <b>PENGINGAT TUGAS (TODO):</b>\n"
+                            f"Tugas \"<b>{escape(task_desc)}</b>\" sudah mencapai tenggat waktu ({escape(deadline_str)})!"
+                        )
+                        await self._broadcast_alert(msg)
+
+                        # 2. Kirim desktop notification di laptop
+                        try:
+                            subprocess.Popen(
+                                ["notify-send", "Pengingat RAV-REMOTE", f"Tugas: {task_desc} sudah mencapai tenggat waktu!"],
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                            )
+                        except Exception:
+                            pass
+
+                        # 3. Hasilkan TTS suara, kirim voice note ke Telegram, dan putar suara di laptop
+                        import tempfile
+                        import shutil
+                        
+                        voice = "id-ID-GadisNeural"
+                        temp_dir = tempfile.gettempdir()
+                        temp_mp3 = os.path.join(temp_dir, f"todo_remind_{int(time.time())}.mp3")
+                        tts_text = f"Halo! Mengingatkan tugas Anda: {task_desc} sudah mencapai tenggat waktu!"
+                        
+                        try:
+                            import edge_tts
+                            communicate = edge_tts.Communicate(tts_text, voice)
+                            await communicate.save(temp_mp3)
+                            
+                            # Kirim voice note ke Telegram
+                            await self._broadcast_voice_alert(
+                                temp_mp3, 
+                                caption=f"🗣️ Asisten Suara: Tenggat tugas '{task_desc}' tiba!"
+                            )
+                            
+                            # Putar suara di speaker laptop secara lokal jika diatur speak_local
+                            if item.get("speak_local", False):
+                                player = None
+                                for p in ["mpg123", "mpv", "play", "ffplay", "paplay", "vlc"]:
+                                    if shutil.which(p):
+                                        player = p
+                                        break
+                                if player:
+                                    if player == "ffplay":
+                                        subprocess.Popen(["ffplay", "-nodisp", "-autoexit", temp_mp3], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                                    elif player == "vlc":
+                                        subprocess.Popen(["cvlc", "--play-and-exit", temp_mp3], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                                    else:
+                                        subprocess.Popen([player, temp_mp3], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        except Exception as tts_err:
+                            logger.error(f"Failed to play or broadcast TTS voice alert: {tts_err}")
+                            
+                except Exception as e:
+                    logger.error(f"Error parsing or reminding todo: {e}")
+
+        if updated:
+            try:
+                with open(todo_file, "w") as f:
+                    json.dump(todos, f, indent=4)
+            except Exception as e:
+                logger.error(f"Error saving updated todos: {e}")
+
     async def run_monitoring_loop(self):
-        """Background loop untuk mengecek timeout heartbeat."""
+        """Background loop untuk mengecek timeout heartbeat dan tenggat waktu todo."""
         while True:
             await self._check_status_once(time.time())
+            await self._check_todo_deadlines_once()
             await asyncio.sleep(30)
 
     async def _broadcast_alert(self, message: str):
@@ -91,6 +187,33 @@ class MonitorTask:
         for user_id in self.allowed_users:
             try:
                 if user_id:
-                    await self.app.bot.send_message(chat_id=user_id, text=message, parse_mode="HTML")
+                    logger.info(f"Broadcasting alert to {user_id}...")
+                    # Set high timeout for slow networks
+                    await self.app.bot.send_message(
+                        chat_id=user_id, 
+                        text=message, 
+                        parse_mode="HTML",
+                        read_timeout=60,
+                        connect_timeout=60
+                    )
+                    logger.info(f"Successfully broadcasted to {user_id}")
             except Exception as e:
                 logger.error(f"Failed to broadcast alert to {user_id}: {e}")
+
+    async def _broadcast_voice_alert(self, file_path: str, caption: str):
+        """Kirim voice note audio ke semua user yang terdaftar."""
+        for user_id in self.allowed_users:
+            try:
+                if user_id:
+                    logger.info(f"Broadcasting voice alert to {user_id}...")
+                    with open(file_path, "rb") as voice_file:
+                        await self.app.bot.send_voice(
+                            chat_id=user_id,
+                            voice=voice_file,
+                            caption=caption,
+                            read_timeout=60,
+                            connect_timeout=60
+                        )
+                    logger.info(f"Successfully broadcasted voice alert to {user_id}")
+            except Exception as e:
+                logger.error(f"Failed to broadcast voice alert to {user_id}: {e}")

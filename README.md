@@ -25,7 +25,7 @@ Currently, the project boasts **9 Core Features** divided into four logical cate
 
 **4. Ultimate Power (Pro Features)**
 - 🚀 **Sandbox Scripts (`!run <script>`):** Execute custom Python/Bash scripts isolated within Firejail/Docker.
-- ⌨️ **Persistent Terminal (`!term`):** Open a fully interactive, background PTY shell. Perfect for running long commands or interacting with CLI agents like `gemini` or `git`.
+- ⌨️ **Persistent Terminal (`!term`):** Open a fully interactive, background PTY shell. Perfect for running long commands or interacting with CLI agents like `opencode` or `git`.
 
 ## Getting Started
 

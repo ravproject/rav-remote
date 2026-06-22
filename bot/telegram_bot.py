@@ -11,6 +11,7 @@ import tempfile
 import speech_recognition as sr
 from pydub import AudioSegment
 from dotenv import load_dotenv
+from html import escape
 
 # Suppress python-telegram-bot shutdown warning
 warnings.filterwarnings("ignore", category=RuntimeWarning, message="coroutine 'Updater.stop' was never awaited")
@@ -73,7 +74,7 @@ _terminal_tasks: dict[str, asyncio.Task] = {}
 
 async def heartbeat_poller(app: Application, monitor: MonitorTask):
     """Background task to poll heartbeats from all registered agents."""
-    async with httpx.AsyncClient(timeout=5.0) as client:
+    async with httpx.AsyncClient(timeout=10.0) as client:
         while True:
             agents = registry.get_all()
             for agent_id, data in agents.items():
@@ -89,6 +90,7 @@ async def heartbeat_poller(app: Application, monitor: MonitorTask):
                         await monitor.update_heartbeat(agent_id, metrics)
                         
                         for alert in alerts:
+                            logger.info(f"New alert from {agent_id}: {alert}")
                             await monitor._broadcast_alert(f"⚠️ <b>Alert ({agent_id}):</b> {alert}")
                             
                     elif response.status_code == 401:
@@ -97,7 +99,8 @@ async def heartbeat_poller(app: Application, monitor: MonitorTask):
                 except Exception as e:
                     logger.debug(f"Heartbeat poller error for {agent_id} (Agent might be offline): {e}")
             
-            await asyncio.sleep(60)
+            # Check every 30 seconds for faster proactive alerts
+            await asyncio.sleep(30)
 
 async def post_init(application: Application):
     """Dipanggil setelah bot siap, sebelum polling dimulai."""
@@ -322,11 +325,10 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, ov
         return
 
     if _terminal_mode.get(user_id):
-        # Auto-inject safety flags for AI CLIs to prevent interactive blocking
         processed_text = message_text
-        if message_text.startswith("gemini ") and "--yolo" not in message_text:
-            processed_text = message_text.replace("gemini ", "gemini --yolo ", 1)
-            logger.info(f"Auto-injected --yolo for gemini command from {user_id}")
+        if message_text.startswith("agy ") and "--yolo" not in message_text:
+            processed_text = message_text.replace("agy ", "agy --yolo ", 1)
+            logger.info(f"Auto-injected --yolo for agy command from {user_id}")
         elif message_text.startswith("opencode ") and "--dangerously-skip-permissions" not in message_text:
             processed_text = message_text.replace("opencode ", "opencode --dangerously-skip-permissions ", 1)
             logger.info(f"Auto-injected --dangerously-skip-permissions for opencode command from {user_id}")
@@ -395,7 +397,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, ov
             content = result.get("content")
             
             if res_type == "text":
-                await update.message.reply_text(f"✅ <b>Hasil:</b>\n<code>{content}</code>", parse_mode="HTML")
+                await update.message.reply_text(f"✅ <b>Hasil:</b>\n<code>{escape(content)}</code>", parse_mode="HTML")
             elif res_type == "image":
                 await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=constants.ChatAction.UPLOAD_PHOTO)
                 import base64
@@ -407,6 +409,11 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, ov
                     await update.message.reply_video(base64.b64decode(content["data"]), filename=content.get("filename", "video.mp4"), caption="📹 Rekaman Layar Berhasil")
                 else:
                     await update.message.reply_video(base64.b64decode(content), caption="📹 Live Stream Berhasil")
+            elif res_type == "audio":
+                await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=constants.ChatAction.RECORD_VOICE)
+                import base64
+                audio_data = result.get("content", {})
+                await update.message.reply_audio(audio=base64.b64decode(audio_data["data"]), filename=audio_data["filename"], caption="🎵 Rekaman Suara Berhasil")
             elif res_type == "document":
                 await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=constants.ChatAction.UPLOAD_DOCUMENT)
                 import base64
@@ -422,10 +429,18 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, ov
             await update.message.reply_text(f"❌ <b>Error Agent ({res.status_code}):</b> Gagal memproses perintah.", parse_mode="HTML")
             
     except httpx.TimeoutException:
-        if 'processing_msg' in locals(): await processing_msg.delete()
+        if 'processing_msg' in locals():
+            try:
+                await processing_msg.delete()
+            except Exception:
+                pass
         await update.message.reply_text("⏳ <b>Waktu Habis:</b> Agent terlalu lama merespons. Mungkin sedang memproses tugas berat.", parse_mode="HTML")
     except Exception as e:
-        if 'processing_msg' in locals(): await processing_msg.delete()
+        if 'processing_msg' in locals():
+            try:
+                await processing_msg.delete()
+            except Exception:
+                pass
         logger.error(f"Command error: {e}")
         await update.message.reply_text("❌ <b>Koneksi Gagal:</b> Tidak dapat menghubungi Agent. Pastikan Agent sedang online.", parse_mode="HTML")
 

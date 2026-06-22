@@ -45,10 +45,7 @@ def get_file(filepath: str) -> dict:
     if not target.exists() or not target.is_file():
         return {"error": "File tidak ditemukan."}
 
-    # Cek ekstensi
-    allowed_ext = {".pdf", ".txt", ".png", ".jpg", ".jpeg", ".docx", ".xlsx", ".log"}
-    if target.suffix.lower() not in allowed_ext:
-        return {"error": f"Ekstensi {target.suffix} tidak diizinkan."}
+
 
     # Cek ukuran (max 50MB)
     max_size = int(os.environ.get("MAX_FILE_SIZE_MB", "50")) * 1024 * 1024
@@ -89,3 +86,16 @@ def save_file(filename: str, content: bytes) -> str:
     except Exception as e:
         logger.error(f"Failed to save file: {e}")
         return f"❌ Gagal menyimpan file: {str(e)}"
+
+def _guess_mimetype(suffix: str) -> str:
+    mimetypes = {
+        ".pdf": "application/pdf",
+        ".txt": "text/plain",
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ".log": "text/plain",
+    }
+    return mimetypes.get(suffix.lower(), "application/octet-stream")

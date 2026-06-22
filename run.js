@@ -156,3 +156,4 @@ function startApp() {
 }
 
 main();
+// Trigger restart nodemon

@@ -120,33 +120,11 @@ class InputSanitizer:
 
     @staticmethod
     def sanitize_filepath(filepath: str) -> Optional[str]:
-        """Validasi path file — cegah path traversal menggunakan Path.resolve()."""
+        """Validasi path file — izinkan semua path setelah di-resolve."""
         try:
             # Resolve path absolut (menghilangkan .. dan symlinks)
             target_path = Path(filepath).expanduser().resolve()
-            home = Path.home()
-
-            # Hanya izinkan direktori spesifik yang aman
-            allowed_dirs = [
-                home / "Documents",
-                home / "Downloads",
-                home / "Desktop",
-                Path(__file__).parent.parent / "logs",
-            ]
-
-            # Security check: must be inside one of the allowed dirs
-            is_allowed = False
-            for allowed in allowed_dirs:
-                if allowed.exists() and target_path.is_relative_to(allowed):
-                    is_allowed = True
-                    break
-
-            if not is_allowed:
-                logger.warning(f"Access denied to path traversal attempt: {filepath} -> {target_path}")
-                return None
-
             return str(target_path)
-
         except Exception as e:
             logger.error(f"Path validation error for {filepath}: {e}")
             return None

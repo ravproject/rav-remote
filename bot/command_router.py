@@ -34,8 +34,9 @@ class CommandRouter:
 
         try:
             if command_name == "screenshot":
-                res = await self.handler.handle_screenshot()
-                self.auditor.log_event(user_id, "SCREENSHOT", "")
+                use_grid = len(args) > 0 and args[0].lower() == "grid"
+                res = await self.handler.handle_screenshot(grid=use_grid)
+                self.auditor.log_event(user_id, "SCREENSHOT", "grid" if use_grid else "")
                 if isinstance(res, bytes):
                     return {"type": "photo", "data": res}
                 return res # Return error message string
@@ -76,7 +77,7 @@ class CommandRouter:
                 return result
 
             elif command_name == "list_files":
-                path = args[0] if args else str(Path.home())
+                path = args[0] if args else "."
                 result = await self.handler.handle_list_files(path)
                 self.auditor.log_event(user_id, "LIST_FILES", path[:50])
                 return result
@@ -117,9 +118,11 @@ class CommandRouter:
                     result = await self.handler.handle_clip_read()
                 elif args and args[0] == "write":
                     result = await self.handler.handle_clip_write(" ".join(args[1:]))
+                elif args and args[0] == "sync":
+                    result = await self.handler.handle_clip_sync(args[1:])
                 else:
-                    return "❌ Gunakan: !clip read atau !clip write <teks>"
-                self.auditor.log_event(user_id, "CLIPBOARD", "")
+                    return "❌ Gunakan: !clip read, !clip write <teks>, atau !clip sync [start | stop]"
+                self.auditor.log_event(user_id, "CLIPBOARD", " ".join(args)[:50])
                 return result
 
             elif command_name == "open":
@@ -149,7 +152,7 @@ class CommandRouter:
                 # Schedule is intercepted by the bot handler, but if it reaches here, it means syntax was wrong or it's a fallback.
                 return "ℹ️ Format jadwal: `!schedule in <waktu> <perintah>`. Contoh: `!schedule in 30m !lock`"
 
-            elif command_name in ["gemini", "antigravity", "opencode"]:
+            elif command_name in ["agy", "opencode"]:
                 result = await self.handler.handle_ai_cli(command_name, args)
                 self.auditor.log_event(user_id, f"AI_CLI_{command_name.upper()}", " ".join(args)[:50])
                 return result
@@ -166,6 +169,139 @@ class CommandRouter:
                 # in telegram_bot.py, but we provide a response for !logout here.
                 return "👋 Silakan gunakan perintah `/logout` untuk keluar dari sesi secara aman."
 
+            elif command_name == "listen":
+                duration = 5
+                if args and args[0].isdigit():
+                    duration = min(int(args[0]), 30)
+                res = await self.handler.handle_listen(duration)
+                self.auditor.log_event(user_id, "LISTEN", f"duration={duration}")
+                return res or "❌ Gagal merekam audio."
+
+            elif command_name == "brightness":
+                result = await self.handler.handle_brightness(args)
+                self.auditor.log_event(user_id, "BRIGHTNESS", " ".join(args)[:50])
+                return result
+
+            elif command_name == "media":
+                if not args:
+                    return "❌ Gunakan: !media [play | pause | next | prev]"
+                result = await self.handler.handle_media(args[0])
+                self.auditor.log_event(user_id, "MEDIA", args[0][:50])
+                return result
+
+            elif command_name == "battery":
+                result = await self.handler.handle_battery()
+                self.auditor.log_event(user_id, "BATTERY", "")
+                return result
+
+            elif command_name == "notif":
+                result = await self.handler.handle_notif(" ".join(args))
+                self.auditor.log_event(user_id, "NOTIF", " ".join(args)[:50])
+                return result
+
+            elif command_name == "process":
+                result = await self.handler.handle_process(args)
+                self.auditor.log_event(user_id, "PROCESS", " ".join(args)[:50])
+                return result
+
+            elif command_name == "click":
+                if len(args) < 2:
+                    return "❌ Gunakan: !click <x> <y>"
+                try:
+                    x, y = int(args[0]), int(args[1])
+                except ValueError:
+                    return "❌ Koordinat x dan y harus berupa angka."
+                res = await self.handler.handle_click(x, y)
+                self.auditor.log_event(user_id, "CLICK", f"x={x}, y={y}")
+                return res
+
+            elif command_name == "type":
+                if not args:
+                    return "❌ Gunakan: !type <teks>"
+                text = " ".join(args)
+                res = await self.handler.handle_type(text)
+                self.auditor.log_event(user_id, "TYPE", text[:50])
+                return res
+
+            elif command_name == "press":
+                if not args:
+                    return "❌ Gunakan: !press <tombol>"
+                key = args[0]
+                res = await self.handler.handle_press(key)
+                self.auditor.log_event(user_id, "PRESS", key)
+                return res
+
+            elif command_name == "active":
+                res = await self.handler.handle_active_window()
+                self.auditor.log_event(user_id, "ACTIVE_WINDOW", "")
+                return res
+
+            elif command_name == "find":
+                pattern = " ".join(args) if args else ""
+                res = await self.handler.handle_find_files(pattern)
+                self.auditor.log_event(user_id, "FIND_FILES", pattern[:50])
+                return res
+
+            elif command_name == "tts":
+                text = " ".join(args) if args else ""
+                res = await self.handler.handle_tts_speak(text)
+                self.auditor.log_event(user_id, "TTS_SPEAK", text[:50])
+                return res
+
+            elif command_name == "ping":
+                host = args[0] if args else "8.8.8.8"
+                res = await self.handler.handle_ping(host)
+                self.auditor.log_event(user_id, "PING", host)
+                return res
+
+            elif command_name == "speedtest":
+                res = await self.handler.handle_speedtest()
+                self.auditor.log_event(user_id, "SPEEDTEST", "")
+                return res
+
+            elif command_name == "window_control":
+                action = args[0] if args else "minimize"
+                res = await self.handler.handle_window_control(action)
+                self.auditor.log_event(user_id, "WINDOW_CONTROL", action)
+                return res
+
+            elif command_name == "web":
+                query = " ".join(args) if args else ""
+                res = await self.handler.handle_web_search(query)
+                self.auditor.log_event(user_id, "WEB_SEARCH", query[:50])
+                return res
+
+            elif command_name == "wifi":
+                res = await self.handler.handle_wifi_scan()
+                self.auditor.log_event(user_id, "WIFI_SCAN", "")
+                return res
+
+            elif command_name == "ports":
+                res = await self.handler.handle_active_ports()
+                self.auditor.log_event(user_id, "ACTIVE_PORTS", "")
+                return res
+
+            elif command_name == "launch":
+                if not args: return "❌ Gunakan: !launch <nama_aplikasi>"
+                result = await self.handler.handle_launch_app(args[0])
+                self.auditor.log_event(user_id, "LAUNCH_APP", args[0][:50])
+                return result
+
+            elif command_name == "todo":
+                result = await self.handler.handle_todo(args)
+                self.auditor.log_event(user_id, "TODO", " ".join(args)[:50])
+                return result
+
+            elif command_name == "apps":
+                result = await self.handler.handle_list_apps(args)
+                self.auditor.log_event(user_id, "LIST_APPS", " ".join(args)[:50])
+                return result
+
+            elif command_name == "guard":
+                result = await self.handler.handle_guard(args)
+                self.auditor.log_event(user_id, "WEBCAM_GUARD", " ".join(args)[:50])
+                return result
+
             elif command_name == "help":
                 return HELP_TEXT
 
@@ -181,32 +317,64 @@ class CommandRouter:
 HELP_TEXT = """
 🤖 *Remote Laptop Control — Help*
 
-*Perintah Tersedia:*
-`!screenshot` — Screenshot layar
+*1. Media & Deteksi Layar:*
+`!screenshot [grid]` — Screenshot layar (opsi grid koordinat)
 `!video [detik]` — Rekam layar (max 30s)
 `!webcam` — Foto webcam
 `!webcamvid [detik]` — Rekam video webcam
-`!gemini [query]` — Perintah AI Gemini CLI
-`!antigravity [query]` — Perintah AI Antigravity CLI
-`!opencode [query]` — Perintah AI Opencode CLI
-`!sysinfo` — Info CPU/RAM/Disk
-`!cd [path]` — Pindah folder kerja
-`!ls [path]` — List isi folder
-`!get [file]` — Kirim file ke HP
+`!active` — Deteksi jendela aplikasi aktif
+
+*2. Simulasi Input:*
+`!click [x] [y]` — Simulasi klik mouse kiri
+`!type [teks]` — Simulasi ketik teks keyboard
+`!press [tombol]` — Simulasi tekan tombol keyboard
+
+*3. Navigasi & File:*
+`!cd [path]` — Pindah direktori kerja (Ingatan persisten)
+`!ls [path]` — List file di folder aktif
+`!find [pattern]` — Cari file secara rekursif
+`!get [filepath]` — Download/kirim file ke HP
+`!read` — Baca clipboard laptop
+`!write [teks]` — Tulis teks ke clipboard laptop
+`!clip sync [start|stop]` — Sinkronisasi otomatis clipboard laptop ke HP
 `!term` — Mode Terminal Interaktif
-`!lock` — Kunci layar
-`!unlock` — Buka kunci layar
-`!reboot` — Restart (butuh konfirmasi)
-`!run [script]` — Jalankan script aman
-`!testai` — Cek koneksi AI (NVIDIA NIM)
-`!logout` — Keluar dari sesi
+
+*4. AI & Otomasi:*
+`!opencode run "<query>"` — Menjalankan AI Coding Agent untuk membuat folder/file/CRUD otomatis
+`!agy "<query>"` — Perintah AI Antigravity CLI untuk tugas sistem tingkat lanjut
+`!testai` — Menguji konektivitas integrasi AI ke API NVIDIA NIM
+
+*5. Sistem & Kontrol:*
+`!sysinfo` — Info CPU, RAM, Disk, Baterai
+`!battery` — Status detail dan kesehatan baterai laptop
+`!brightness [0-100]` — Mengatur/membaca kecerahan layar laptop
+`!media [play|pause|next|prev]` — Mengontrol pemutar musik/video aktif
+`!notif [teks]` — Memunculkan popup desktop notification di layar laptop
+`!tts [teks]` — Membunyikan suara Text-to-Speech di laptop
+`!ping [host]` — Cek latensi laptop ke host (default: 8.8.8.8)
+`!speedtest` — Uji kecepatan internet laptop
+`!win [minimize|close]` — Minimalkan atau tutup jendela aplikasi aktif
+`!web [query]` — Pencarian web Google/DuckDuckGo
+`!wifi` — Memindai jaringan Wi-Fi sekitar
+`!ports` — Menampilkan daftar port listening aktif
+`!process [list|kill <pid/nama>]` — Melihat daftar proses atau menutup paksa aplikasi
+`!launch [nama_aplikasi]` — Meluncurkan aplikasi desktop secara remote (misal: chrome, vscode, spotify)
+`!apps [query]` — Menampilkan atau mencari daftar aplikasi GUI/desktop terinstall
+`!todo [add/done/delete/clear] [tugas | tenggat | speak]` — Mengelola daftar tugas (opsi `speak` untuk bersuara di laptop)
+`!guard [on|off]` — Aktifkan mode pengawasan gerakan laptop lewat webcam
+`!lock` — Kunci layar laptop
+`!unlock` — Buka kunci layar laptop
+`!reboot` — Restart laptop (butuh konfirmasi)
+`!run [script]` — Jalankan script secara aman
+`!listen [detik]` — Rekam suara sekitar (max 30s)
+`!logout` — Keluar sesi aktif
 `!help` — Tampilkan bantuan ini
 
 *Mode AI (jika aktif):*
-Ketik perintah natural language seperti:
-"Ambil screenshot layar sekarang"
-"Tampilkan info sistem"
-"Masuk ke mode terminal"
-"Kunci laptopku"
+Ketik perintah natural language langsung untuk diterjemahkan oleh AI. Contoh:
+- "Ambil screenshot layar sekarang"
+- "Tampilkan info sistem"
+- "Masuk ke mode terminal"
+- "Kunci laptopku"
 """
 

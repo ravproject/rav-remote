@@ -55,15 +55,18 @@ class AuditLogger:
         # Hash user_id untuk privasi di log
         user_hash = hashlib.sha256(user_id.encode()).hexdigest()[:12]
 
+        # Mask details for UNLOCK event to prevent password leakage
+        safe_details = "[MASKED]" if event_type == "UNLOCK" else details[:200]
+
         entry = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "user_hash": user_hash,
             "event_type": event_type,
-            "details": details[:200],
+            "details": safe_details,
             "success": success,
         }
 
-        SENSITIVE_EVENTS = ("SECURITY_ALERT", "AUTH_FAILURE", "TOKEN_REVOKED", "LOGIN_SUCCESS")
+        SENSITIVE_EVENTS = ("SECURITY_ALERT", "AUTH_FAILURE", "TOKEN_REVOKED", "LOGIN_SUCCESS", "UNLOCK")
 
         try:
             if crypto is None:

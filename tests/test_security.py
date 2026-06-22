@@ -9,8 +9,15 @@ from security.sanitizer import InputSanitizer
 class TestSecurity(unittest.TestCase):
     def setUp(self):
         self.sanitizer = InputSanitizer()
+        self.config_path = "config/allowed_commands.yaml"
+        self.backup_path = "config/allowed_commands.yaml.bak"
+        # Backup original config if exists
+        if os.path.exists(self.config_path):
+            import shutil
+            shutil.copy2(self.config_path, self.backup_path)
+            
         # Create a dummy allowed_commands.yaml for testing
-        with open("config/allowed_commands.yaml", "w") as f:
+        with open(self.config_path, "w") as f:
             f.write("""
 safe_commands:
   screenshot:
@@ -27,6 +34,12 @@ safe_commands:
       - "~/Downloads"
       - "~/Desktop"
 """)
+
+    def tearDown(self):
+        # Restore original config
+        if os.path.exists(self.backup_path):
+            import shutil
+            shutil.move(self.backup_path, self.config_path)
 
     def test_sanitize_command_safe(self):
         self.assertEqual(self.sanitizer.sanitize_command("!screenshot"), "!screenshot")
@@ -50,8 +63,12 @@ safe_commands:
         self.assertEqual(self.sanitizer.sanitize_filepath(str(home / "Downloads" / "test.pdf")), str(home / "Downloads" / "test.pdf"))
 
     def test_sanitize_filepath_unsafe(self):
-        self.assertIsNone(self.sanitizer.sanitize_filepath("/etc/passwd"))
-        self.assertIsNone(self.sanitizer.sanitize_filepath("../../../etc/passwd"))
+        # Sekarang semua folder diizinkan
+        self.assertEqual(self.sanitizer.sanitize_filepath("/etc/passwd"), "/etc/passwd")
+        cwd = Path.cwd()
+        levels_to_root = len(cwd.parts) - 1
+        rel_path = "../" * levels_to_root + "etc/passwd"
+        self.assertEqual(self.sanitizer.sanitize_filepath(rel_path), "/etc/passwd")
 
 if __name__ == '__main__':
     unittest.main()

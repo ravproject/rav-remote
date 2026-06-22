@@ -26,6 +26,7 @@ class TestE2E(unittest.IsolatedAsyncioTestCase):
         os.environ["AGENT_API_KEY"] = "mock_agent_key"
         os.environ["AGENT_HOST"] = "localhost"
         os.environ["AGENT_PORT"] = "8765"
+        os.environ["DEV_MODE_ENABLED"] = "false"
         
         # Clear sessions and rate limit state
         tg_bot._user_sessions = {}
@@ -210,7 +211,7 @@ class TestE2E(unittest.IsolatedAsyncioTestCase):
             self.assertIn("berbahaya", last_reply)
 
     async def test_terminal_auto_yolo_injection(self):
-        """Test that gemini/opencode commands get auto-injected with safety flags."""
+        """Test that agy/opencode commands get auto-injected with safety flags."""
         uid_str = str(self.user_id)
         tg_bot._user_sessions[uid_str] = AuthManager.generate_session_token(uid_str)
         tg_bot._terminal_mode[uid_str] = True
@@ -218,13 +219,13 @@ class TestE2E(unittest.IsolatedAsyncioTestCase):
         with patch('bot.telegram_bot.httpx.AsyncClient.post', new_callable=AsyncMock) as mock_post:
             mock_post.return_value = MagicMock(status_code=200)
             
-            # 1. Test gemini injection
-            update = self.create_mock_update("gemini buat aplikasi")
+            # 1. Test agy injection
+            update = self.create_mock_update("agy buat aplikasi")
             await message_handler(update, self.create_mock_context())
             
             mock_post.assert_called_with(
                 unittest.mock.ANY,
-                json={"user_id": uid_str, "data": "gemini --yolo buat aplikasi\n"},
+                json={"user_id": uid_str, "data": "agy --yolo buat aplikasi\n"},
                 headers=unittest.mock.ANY
             )
 

@@ -175,8 +175,11 @@ class TerminalManager:
     def _cleanup_loop(self):
         while True:
             time.sleep(60)
-            now = time.time()
-            to_delete = [uid for uid, s in self.sessions.items() if now - s.last_activity > 900 or s.process.poll() is not None]
-            for uid in to_delete: self.stop_session(uid)
+            self._cleanup_loop_once()
+
+    def _cleanup_loop_once(self):
+        now = time.time()
+        to_delete = [uid for uid, s in self.sessions.items() if now - s.last_activity > 900 or s.process.poll() is not None]
+        for uid in to_delete: self.stop_session(uid)
 
 terminal_manager = TerminalManager()

@@ -107,10 +107,9 @@ async function connectWhatsApp() {
       return;
     }
 
-    // Auto-inject safety flags for AI CLIs in Terminal/Command mode
     let processedText = text;
-    if (text.startsWith("gemini ") && !text.includes("--yolo")) {
-      processedText = text.replace("gemini ", "gemini --yolo ");
+    if (text.startsWith("agy ") && !text.includes("--yolo")) {
+      processedText = text.replace("agy ", "agy --yolo ");
     } else if (text.startsWith("opencode ") && !text.includes("--dangerously-skip-permissions")) {
       processedText = text.replace("opencode ", "opencode --dangerously-skip-permissions ");
     }
