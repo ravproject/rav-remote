@@ -250,25 +250,12 @@ async def execute_command(
              return {"type": "text", "content": f"❌ {result['error']}"}
         else:
             final_text = str(result)
-            if len(final_text) > 4000:
-                return {"type": "document", "content": {
-                    "data": base64.b64encode(final_text.encode()).decode(),
-                    "filename": "output.txt",
-                    "mimetype": "text/plain",
-                }}
             return {"type": "text", "content": final_text}
     else:
         # Check if result is the specific summary from sys_monitor
         final_text = str(result)
         if request.command.strip() == "!sysinfo":
              final_text = sys_monitor.get_system_summary()
-             
-        if len(final_text) > 4000:
-            return {"type": "document", "content": {
-                "data": base64.b64encode(final_text.encode()).decode(),
-                "filename": "output.txt",
-                "mimetype": "text/plain",
-            }}
         return {"type": "text", "content": final_text}
 
 
