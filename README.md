@@ -161,4 +161,4 @@ The developers of this project are not responsible for any damage or loss of dat
 
 ## Contributing & Development
 
-We enforce strict rules for adding new features to ensure the security and stability of the host machines. If you are developing new features or acting as an AI assistant modifying this codebase, you **MUST** read and adhere to the [DEVELOPMENT_STANDARDS.md](DEVELOPMENT_STANDARDS.md).
+We enforce strict rules for adding new features to ensure the security and stability of the host machines. If you are developing new features or acting as an AI assistant modifying this codebase, you **MUST** read and adhere to the [DEVELOPMENT_STANDARDS.md](docs/DEVELOPMENT_STANDARDS.md).

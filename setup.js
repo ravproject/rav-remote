@@ -80,8 +80,7 @@ async function main() {
     // Daftar folder/file yang harus disalin
     const itemsToCopy = [
         'agent', 'bot', 'ai_module', 'security', 'config', 'docker', 'tests',
-        'requirements.txt', 'package.json', 'README.md', 'BLUEPRINT.md', 
-        'ENV_SETUP_GUIDE.md', 'telegram_credentials.md', 'run.js'
+        'requirements.txt', 'package.json', 'README.md', 'docs', 'run.js'
     ];
 
     itemsToCopy.forEach(item => {

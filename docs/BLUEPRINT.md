@@ -127,7 +127,7 @@ remote-laptop-control/
 │
 ├── requirements.txt            # Python deps
 ├── package.json                # Node.js deps (WhatsApp)
-├── BLUEPRINT.md                # Dokumen ini
+├── docs/BLUEPRINT.md           # Dokumen ini
 └── README.md
 ```
 

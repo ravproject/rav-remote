@@ -17,4 +17,6 @@ npm-debug.log
 logs/
 sessions/
 wa_session/
-\n# Debug Artifacts\ndebug_screenshot.py\ntest_dbus_ss.py\ntest_ffmpeg.png
+
+# Debug Artifacts
+test_ffmpeg.png
