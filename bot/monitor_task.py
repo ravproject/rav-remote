@@ -4,6 +4,7 @@ Mendukung Pull Model (Bot -> Agent) dan transisi state ONLINE/DEGRADED/OFFLINE.
 """
 import asyncio
 import time
+import httpx
 from loguru import logger
 from telegram.ext import Application
 import os
@@ -175,11 +176,33 @@ class MonitorTask:
             except Exception as e:
                 logger.error(f"Error saving updated todos: {e}")
 
+    async def _check_file_watcher_once(self):
+        """Poll file watcher changes from agent and broadcast to users."""
+        agent_url = f"http://{os.environ.get('AGENT_HOST', 'localhost')}:{os.environ.get('AGENT_PORT', '8765')}"
+        api_key = os.environ.get("AGENT_API_KEY", "")
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(
+                    f"{agent_url}/system/file-watcher-changes",
+                    headers={"X-API-Key": api_key},
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    for item in data.get("changes", []):
+                        folder = item.get("folder", "")
+                        changes = item.get("changes", [])
+                        if changes:
+                            msg = f"📡 <b>File Watcher:</b> {escape(folder)}\n" + "\n".join(escape(c) for c in changes[:5])
+                            await self._broadcast_alert(msg)
+        except Exception:
+            pass
+
     async def run_monitoring_loop(self):
         """Background loop untuk mengecek timeout heartbeat dan tenggat waktu todo."""
         while True:
             await self._check_status_once(time.time())
             await self._check_todo_deadlines_once()
+            await self._check_file_watcher_once()
             await asyncio.sleep(30)
 
     async def _broadcast_alert(self, message: str):

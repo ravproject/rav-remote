@@ -17,7 +17,9 @@
     "start": "node run.js",
     "setup": "node setup.js",
     "whatsapp": "node run.js --whatsapp",
-    "dev": "nodemon -e js,json,py,yaml,env run.js"
+    "dev": "nodemon -e js,json,py,yaml,env run.js",
+    "check-deps": "node scripts/check_deps.js",
+    "postinstall": "node scripts/check_deps.js"
   },
   "dependencies": {
     "@hapi/boom": "^10.0.1",

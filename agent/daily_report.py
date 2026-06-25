@@ -1,12 +1,11 @@
-"""
-Daily Report — summarizes laptop activity for the last 24 hours.
-"""
 import os
-import platform
 import psutil
 from datetime import datetime, timedelta
 from pathlib import Path
 from loguru import logger
+
+from agent.platform_utils import IS_LINUX, IS_MACOS, IS_WINDOWS
+
 
 def generate_daily_report(period: str = "today") -> str:
     now = datetime.now()
@@ -25,7 +24,7 @@ def generate_daily_report(period: str = "today") -> str:
 
     cpu = psutil.cpu_percent(interval=0.5)
     ram = psutil.virtual_memory()
-    disk = psutil.disk_usage("/")
+    disk = psutil.disk_usage("/") if not IS_WINDOWS else psutil.disk_usage("C:\\")
     boot = datetime.fromtimestamp(psutil.boot_time())
     uptime = now - boot
 
@@ -44,14 +43,5 @@ def generate_daily_report(period: str = "today") -> str:
     lines.append("Top Proses (CPU):")
     for p in procs[:8]:
         lines.append(f"  {p['name']} - CPU: {p.get('cpu_percent', 0):.1f}% Mem: {p.get('memory_percent', 0):.1f}%")
-
-    if platform.system() == "Linux":
-        try:
-            import subprocess
-            res = subprocess.run(["who", "-b"], capture_output=True, text=True, timeout=3)
-            if res.stdout:
-                lines.append(f"\nSession: {res.stdout.strip()}")
-        except Exception:
-            pass
 
     return "\n".join(lines)

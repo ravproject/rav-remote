@@ -11,10 +11,22 @@ from typing import Optional, List, Tuple
 from loguru import logger
 
 # Load whitelist dari config
-def load_allowed_commands() -> dict:
-    config_path = Path(__file__).parent.parent / "config" / "allowed_commands.yaml"
-    with open(config_path) as f:
-        return yaml.safe_load(f)
+CONFIG_PATH = Path(__file__).parent.parent / "config" / "allowed_commands.yaml"
+_CONFIG_CACHE = None
+_CONFIG_MTIME = 0
+
+def load_allowed_commands(force: bool = False) -> dict:
+    global _CONFIG_CACHE, _CONFIG_MTIME
+    try:
+        mtime = CONFIG_PATH.stat().st_mtime
+        if force or _CONFIG_CACHE is None or mtime > _CONFIG_MTIME:
+            with open(CONFIG_PATH) as f:
+                _CONFIG_CACHE = yaml.safe_load(f)
+            _CONFIG_MTIME = mtime
+    except Exception:
+        if _CONFIG_CACHE is None:
+            _CONFIG_CACHE = {}
+    return _CONFIG_CACHE
 
 ALLOWED_COMMANDS = load_allowed_commands()
 
@@ -54,15 +66,14 @@ class InputSanitizer:
             # 1. Validasi Perintah Utama (Whitelist) jika menggunakan prefix '!'
             is_explicit = normalized.startswith("!")
             cmd_name = tokens[0].lstrip("!").lower()
-            safe_cmds = ALLOWED_COMMANDS.get("safe_commands", {})
-            
-            if is_explicit and cmd_name not in safe_cmds:
+
+            if is_explicit and cmd_name not in load_allowed_commands().get("safe_commands", {}):
                 logger.warning(f"Command not in whitelist: {cmd_name}")
                 return None
 
             # 2. Validasi Argumen & Natural Language (Blacklist)
             # Ambil pola blokir dari config
-            blocked_patterns = ALLOWED_COMMANDS.get("blocked_patterns", [])
+            blocked_patterns = load_allowed_commands().get("blocked_patterns", [])
             compiled_patterns = [re.compile(p, re.IGNORECASE) for p in blocked_patterns]
 
             # Pola tambahan tingkat lanjut (Hardcoded sebagai safety net terakhir)
@@ -114,9 +125,8 @@ class InputSanitizer:
             return False, ""
         
         cmd_name = parts[0].lstrip("!")
-        safe_cmds = ALLOWED_COMMANDS.get("safe_commands", {})
-        
-        return cmd_name in safe_cmds, cmd_name
+
+        return cmd_name in load_allowed_commands().get("safe_commands", {}), cmd_name
 
     @staticmethod
     def sanitize_filepath(filepath: str) -> Optional[str]:

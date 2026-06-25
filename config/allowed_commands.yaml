@@ -226,6 +226,18 @@ safe_commands:
     description: "Alias web"
     requires_confirmation: false
     sandbox_required: false
+  scrape:
+    description: "Scrape konten web dengan content extraction (URL / search / RSS)"
+    requires_confirmation: false
+    sandbox_required: false
+  scrap:
+    description: "Alias scrape"
+    requires_confirmation: false
+    sandbox_required: false
+  scraper:
+    description: "Alias scrape"
+    requires_confirmation: false
+    sandbox_required: false
   wifi:
     description: "Memindai jaringan Wi-Fi sekitar"
     requires_confirmation: false
@@ -266,14 +278,6 @@ safe_commands:
     sandbox_required: false
   ws:
     description: "Alias workspace"
-    requires_confirmation: false
-    sandbox_required: false
-  calendar:
-    description: "Integrasi Google Calendar"
-    requires_confirmation: false
-    sandbox_required: false
-  cal:
-    description: "Alias calendar"
     requires_confirmation: false
     sandbox_required: false
   quicknote:
@@ -626,6 +630,188 @@ safe_commands:
     sandbox_required: false
   agent:
     description: "Alias ai_agent"
+    requires_confirmation: false
+    sandbox_required: false
+
+  # PHASE 6: AI Advanced Intelligence
+  memory:
+    description: "Long-term memory RAG system (search/summarize/forget/stats/sync)"
+    requires_confirmation: false
+    sandbox_required: false
+  ingat:
+    description: "Alias memory"
+    requires_confirmation: false
+    sandbox_required: false
+  mcp:
+    description: "Memory Context Provider — monitoring realtime aktivitas laptop"
+    requires_confirmation: false
+    sandbox_required: false
+  companion:
+    description: "Personal AI companion dengan emotional intelligence"
+    requires_confirmation: false
+    sandbox_required: false
+  teman:
+    description: "Alias companion"
+    requires_confirmation: false
+    sandbox_required: false
+  solve:
+    description: "Advanced problem solver dengan live web access"
+    requires_confirmation: false
+    sandbox_required: false
+  atasi:
+    description: "Alias solve"
+    requires_confirmation: false
+    sandbox_required: false
+  create_feature:
+    description: "Self-feature generation via AI (buat fitur baru otomatis)"
+    requires_confirmation: true
+    sandbox_required: false
+  create:
+    description: "Alias create_feature"
+    requires_confirmation: true
+    sandbox_required: false
+  buat:
+    description: "Alias create_feature"
+    requires_confirmation: true
+    sandbox_required: false
+  self_evolve:
+    description: "Daily self-introspection & auto evolution engine"
+    requires_confirmation: false
+    sandbox_required: false
+  evolve:
+    description: "Alias self_evolve"
+    requires_confirmation: false
+    sandbox_required: false
+  optimize_me:
+    description: "Personalized usage optimization advisor"
+    requires_confirmation: false
+    sandbox_required: false
+  optimize:
+    description: "Alias optimize_me"
+    requires_confirmation: false
+    sandbox_required: false
+  proactive:
+    description: "Proactive & reactive awareness alerts"
+    requires_confirmation: false
+    sandbox_required: false
+  proaktif:
+    description: "Alias proactive"
+    requires_confirmation: false
+    sandbox_required: false
+  learn:
+    description: "Continuous knowledge enrichment dari web"
+    requires_confirmation: false
+    sandbox_required: false
+  belajar:
+    description: "Alias learn"
+    requires_confirmation: false
+    sandbox_required: false
+  agent_mode:
+    description: "Advanced autonomous agent mode untuk goal kompleks"
+    requires_confirmation: false
+    sandbox_required: false
+  internet_brain:
+    description: "Internet Brain — jawab pertanyaan dengan pengetahuan internet terkini"
+    requires_confirmation: false
+    sandbox_required: false
+  otak_internet:
+    description: "Alias internet_brain"
+    requires_confirmation: false
+    sandbox_required: false
+  live_web:
+    description: "Pencarian web real-time dengan hasil langsung"
+    requires_confirmation: false
+    sandbox_required: false
+  web_langsung:
+    description: "Alias live_web"
+    requires_confirmation: false
+    sandbox_required: false
+  deep_scrape:
+    description: "Analisis mendalam halaman web dengan AI"
+    requires_confirmation: false
+    sandbox_required: false
+  scrape_dalam:
+    description: "Alias deep_scrape"
+    requires_confirmation: false
+    sandbox_required: false
+  research:
+    description: "Riset komprehensif multi-sumber dengan AI (light/medium/deep)"
+    requires_confirmation: false
+    sandbox_required: false
+  riset:
+    description: "Alias research"
+    requires_confirmation: false
+    sandbox_required: false
+  verify_fact:
+    description: "Verifikasi kebenaran informasi dari berbagai sumber"
+    requires_confirmation: false
+    sandbox_required: false
+  cek_fakta:
+    description: "Alias verify_fact"
+    requires_confirmation: false
+    sandbox_required: false
+  news_digest:
+    description: "News Digest — ringkasan berita terkini dari RSS feed"
+    requires_confirmation: false
+    sandbox_required: false
+  ringkasan_berita:
+    description: "Alias news_digest"
+    requires_confirmation: false
+    sandbox_required: false
+  trend_hunter:
+    description: "Trend Hunter — identifikasi tren terbaru dari multi-sumber"
+    requires_confirmation: false
+    sandbox_required: false
+  pemburu_tren:
+    description: "Alias trend_hunter"
+    requires_confirmation: false
+    sandbox_required: false
+  comparator:
+    description: "Smart Comparator — bandingkan dua item side-by-side"
+    requires_confirmation: false
+    sandbox_required: false
+  pembanding:
+    description: "Alias comparator"
+    requires_confirmation: false
+    sandbox_required: false
+  qna:
+    description: "Advanced Q&A — tanya jawab dengan konteks memory + web"
+    requires_confirmation: false
+    sandbox_required: false
+  tanya:
+    description: "Alias qna"
+    requires_confirmation: false
+    sandbox_required: false
+  generate_image:
+    description: "AI Image Generator — generate prompt & deskripsi gambar"
+    requires_confirmation: false
+    sandbox_required: false
+  gambar:
+    description: "Alias generate_image"
+    requires_confirmation: false
+    sandbox_required: false
+  translate:
+    description: "Smart Translator — terjemahan dengan konteks"
+    requires_confirmation: false
+    sandbox_required: false
+  terjemah:
+    description: "Alias translate"
+    requires_confirmation: false
+    sandbox_required: false
+  explain:
+    description: "AI Explainer — jelaskan konsep kompleks jadi mudah dipahami"
+    requires_confirmation: false
+    sandbox_required: false
+  jelaskan:
+    description: "Alias explain"
+    requires_confirmation: false
+    sandbox_required: false
+  proactive_suggest:
+    description: "Proactive Suggest — saran fitur berdasarkan pola penggunaan"
+    requires_confirmation: false
+    sandbox_required: false
+  saran_otomatis:
+    description: "Alias proactive_suggest"
     requires_confirmation: false
     sandbox_required: false
 

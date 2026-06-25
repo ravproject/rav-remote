@@ -24,6 +24,7 @@ from agent.webcam import capture_webcam
 from agent.audio_recorder import record_audio
 from agent.input_simulator import simulate_click, simulate_type, simulate_press
 from agent.active_window import get_active_window_title
+from agent.macro import macro_manager
 
 # State sinkronisasi clipboard otomatis
 clipboard_sync_active = False
@@ -92,9 +93,9 @@ class CommandHandler:
     def get_cwd(self) -> str:
         return self._cwd
 
-    async def handle_screenshot(self, grid: bool = False) -> bytes:
+    async def handle_screenshot(self, grid: bool = False, monitor: int = -1) -> bytes:
         """Ambil screenshot dan return sebagai bytes PNG."""
-        return await asyncio.to_thread(take_screenshot, grid)
+        return await asyncio.to_thread(take_screenshot, grid, monitor)
 
     async def handle_video(self, duration: int = 5) -> Optional[bytes]:
         """Rekam layar dan return sebagai bytes MP4."""
@@ -144,6 +145,8 @@ class CommandHandler:
         """Buka URL di browser default laptop."""
         try:
             if not url.startswith("http"): url = "https://" + url
+            if macro_manager.recording:
+                macro_manager.add_action({"action": "open_url", "url": url})
             await asyncio.to_thread(webbrowser.open, url)
             return f"🌐 Berhasil membuka browser untuk: {url}"
         except Exception as e:
@@ -407,15 +410,108 @@ class CommandHandler:
 
     async def handle_click(self, x: int, y: int) -> str:
         """Simulasi klik mouse kiri."""
+        if macro_manager.recording:
+            macro_manager.add_action({"action": "click", "x": x, "y": y})
         return await asyncio.to_thread(simulate_click, x, y)
 
     async def handle_type(self, text: str) -> str:
         """Simulasi mengetik teks."""
+        if macro_manager.recording:
+            macro_manager.add_action({"action": "type", "text": text})
         return await asyncio.to_thread(simulate_type, text)
 
     async def handle_press(self, key: str) -> str:
         """Simulasi menekan tombol keyboard."""
+        if macro_manager.recording:
+            macro_manager.add_action({"action": "key", "key": key})
         return await asyncio.to_thread(simulate_press, key)
+
+    async def handle_rightclick(self, x: int, y: int) -> str:
+        """Simulasi klik kanan mouse."""
+        if macro_manager.recording:
+            macro_manager.add_action({"action": "rightclick", "x": x, "y": y})
+        import subprocess, shutil
+        if shutil.which("xdotool"):
+            subprocess.run(["xdotool", "mousemove", str(x), str(y), "click", "3"],
+                           capture_output=True, timeout=3)
+            return f"🖱️ Klik kanan pada ({x}, {y})."
+        from agent.input_simulator import _ensure_pyautogui
+        if _ensure_pyautogui():
+            import pyautogui
+            pyautogui.click(x, y, button="right")
+            return f"🖱️ Klik kanan pada ({x}, {y})."
+        return "Gagal klik kanan. Install xdotool atau pyautogui."
+
+    async def handle_doubleclick(self, x: int, y: int) -> str:
+        """Simulasi dobel klik mouse."""
+        if macro_manager.recording:
+            macro_manager.add_action({"action": "doubleclick", "x": x, "y": y})
+        from agent.input_simulator import _ensure_pyautogui
+        if _ensure_pyautogui():
+            import pyautogui
+            pyautogui.doubleClick(x, y)
+            return f"🖱️ Dobel klik pada ({x}, {y})."
+        if shutil.which("xdotool"):
+            subprocess.run(["xdotool", "mousemove", str(x), str(y), "click", "--repeat", "2", "1"],
+                           capture_output=True, timeout=3)
+            return f"🖱️ Dobel klik pada ({x}, {y})."
+        return "Gagal dobel klik. Install pyautogui."
+
+    async def handle_drag(self, x1: int, y1: int, x2: int, y2: int) -> str:
+        """Simulasi drag mouse."""
+        if macro_manager.recording:
+            macro_manager.add_action({"action": "drag", "x1": x1, "y1": y1, "x2": x2, "y2": y2})
+        from agent.input_simulator import _ensure_pyautogui
+        if _ensure_pyautogui():
+            import pyautogui
+            pyautogui.moveTo(x1, y1)
+            pyautogui.drag(x2 - x1, y2 - y1, duration=0.3)
+            return f"🖱️ Drag dari ({x1},{y1}) ke ({x2},{y2})."
+        return "Gagal drag. Install pyautogui."
+
+    async def handle_scroll(self, direction: str = "down", amount: int = 3) -> str:
+        """Simulasi scroll mouse."""
+        if macro_manager.recording:
+            macro_manager.add_action({"action": "scroll", "direction": direction, "amount": amount})
+        from agent.input_simulator import _ensure_pyautogui
+        if _ensure_pyautogui():
+            import pyautogui
+            pyautogui.scroll(-amount if direction == "down" else amount)
+            return f"🖱️ Scroll {direction} x{amount}."
+        return "Gagal scroll. Install pyautogui."
+
+    async def handle_clickimage(self, template_path: str, confidence: float = 0.8) -> str:
+        """Cari gambar di layar dan klik."""
+        if macro_manager.recording:
+            macro_manager.add_action({"action": "click_image", "template": template_path, "confidence": confidence})
+        from agent.vision import click_image as ci
+        result = ci(template_path, confidence)
+        if result:
+            return f"🔍 Gambar ditemukan dan diklik."
+        return "❌ Gambar tidak ditemukan di layar."
+
+    async def handle_waitimage(self, template_path: str, timeout: float = 10, confidence: float = 0.8) -> str:
+        """Tunggu gambar muncul di layar."""
+        if macro_manager.recording:
+            macro_manager.add_action({"action": "wait_image", "template": template_path, "timeout": timeout, "confidence": confidence})
+        from agent.vision import wait_for_image
+        result = wait_for_image(template_path, timeout, confidence)
+        if result:
+            return f"✅ Gambar ditemukan di ({result['x']}, {result['y']})."
+        return f"❌ Gambar tidak muncul dalam {timeout}s."
+
+    async def handle_run(self, command: str) -> str:
+        """Jalankan shell command."""
+        if macro_manager.recording:
+            macro_manager.add_action({"action": "run", "command": command})
+        try:
+            result = subprocess.run(command, shell=True, capture_output=True, timeout=30, text=True)
+            output = result.stdout.strip() or result.stderr.strip() or "OK"
+            return f"⚡ {output[:500]}"
+        except subprocess.TimeoutExpired:
+            return "⏱️ Command timeout (>30s)."
+        except Exception as e:
+            return f"❌ Error: {e}"
 
     async def handle_active_window(self) -> str:
         """Mendeteksi jendela aplikasi yang aktif saat ini."""
@@ -491,6 +587,9 @@ class CommandHandler:
         }
         if action not in action_map:
             return "❌ Aksi media tidak dikenal. Gunakan: play, pause, next, prev."
+
+        if macro_manager.recording:
+            macro_manager.add_action({"action": "key", "key": f"media_{action}"})
             
         mpris_method = action_map[action]
         
@@ -657,17 +756,12 @@ class CommandHandler:
         return "\n".join(lines)
 
     async def handle_notif(self, text: str) -> str:
-        """Memunculkan pesan popup desktop notification langsung di layar laptop."""
         if not text:
-            return "❌ Pesan notifikasi tidak boleh kosong."
-            
-        import subprocess
-        try:
-            subprocess.run(["notify-send", "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-            subprocess.run(["notify-send", "RAV-REMOTE", text], check=True)
-            return "🔔 Notifikasi desktop berhasil dikirim."
-        except Exception as e:
-            return f"❌ Gagal mengirim notifikasi desktop: {e}"
+            return "Pesan notifikasi tidak boleh kosong."
+        from agent.notifier import send_notification
+        if send_notification("RAV-REMOTE", text):
+            return "Notifikasi desktop berhasil dikirim."
+        return "Gagal kirim notifikasi. Install notify-send (Linux), plyer, atau osascript (macOS)."
 
     async def handle_process(self, args: list) -> str:
         """Melihat daftar aplikasi yang berjalan atau menutup paksa aplikasi."""
@@ -983,6 +1077,9 @@ class CommandHandler:
         action = action.lower().strip()
         if action not in ["minimize", "close"]:
             return "❌ Aksi jendela tidak dikenal. Gunakan: minimize, close."
+
+        if macro_manager.recording:
+            macro_manager.add_action({"action": "key", "key": f"window_{action}"})
             
         current_os = platform.system()
         try:
@@ -1357,12 +1454,11 @@ class CommandHandler:
             return f"❌ Gagal memonitor port aktif: {e}"
 
     async def handle_launch_app(self, app_name: str) -> str:
-        """Meluncurkan aplikasi desktop secara background."""
         import subprocess
         import shutil
+        from pathlib import Path
         app_name = app_name.lower().strip()
-        
-        # Pemetaan aplikasi populer
+
         app_map = {
             "chrome": ["google-chrome", "chrome", "chromium-browser", "google-chrome-stable"],
             "firefox": ["firefox"],
@@ -1372,13 +1468,16 @@ class CommandHandler:
             "slack": ["slack"],
             "calculator": ["gnome-calculator", "calc", "kcalc"],
             "calc": ["gnome-calculator", "calc", "kcalc"],
-            "terminal": ["gnome-terminal", "xterm", "konsole", "xfce4-terminal"],
-            "files": ["nautilus", "xdg-open .", "thunar", "dolphin"],
-            "explorer": ["nautilus", "xdg-open .", "thunar", "dolphin"],
-            "notepad": ["gedit", "kate", "mousepad", "nano"],
-            "discord": ["discord"]
+            "terminal": ["gnome-terminal", "xterm", "konsole", "xfce4-terminal", "kgx"],
+            "files": ["nautilus", "thunar", "dolphin", "pcmanfm"],
+            "explorer": ["nautilus", "thunar", "dolphin", "pcmanfm"],
+            "notepad": ["gedit", "kate", "mousepad", "nano", "xed"],
+            "discord": ["discord"],
+            "obs": ["obs"],
+            "btop": ["btop"],
+            "settings": ["gnome-control-center"],
         }
-        
+
         commands_to_try = app_map.get(app_name, [app_name])
         found_cmd = None
         for cmd in commands_to_try:
@@ -1386,15 +1485,38 @@ class CommandHandler:
             if shutil.which(exe):
                 found_cmd = cmd
                 break
-                
+
         if not found_cmd:
-            return f"❌ Aplikasi '{app_name}' tidak teridentifikasi di sistem Anda. Coba jalankan manual via terminal."
-            
+            for apps_dir in ["/usr/share/applications", "/usr/local/share/applications",
+                             str(Path.home() / ".local/share/applications")]:
+                d = Path(apps_dir)
+                if not d.exists():
+                    continue
+                for f in d.glob("*.desktop"):
+                    try:
+                        content = f.read_text()
+                        name_match = False
+                        exec_line = ""
+                        for line in content.split("\n"):
+                            if line.lower().startswith("name=") and app_name in line.lower().split("=", 1)[-1].strip().lower():
+                                name_match = True
+                            if line.startswith("Exec="):
+                                exec_line = line.split("=", 1)[1].strip()
+                        if name_match and exec_line:
+                            found_cmd = exec_line.split("%")[0].strip()
+                            break
+                    except Exception:
+                        pass
+                if found_cmd:
+                    break
+
+        if not found_cmd:
+            return f"❌ Aplikasi '{app_name}' tidak ditemukan. Coba: !quick app firefox"
+
         try:
-            # Jalankan di background tanpa memblokir
             subprocess.Popen(
-                found_cmd, shell=True, 
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, 
+                found_cmd, shell=True,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                 start_new_session=True
             )
             return f"🚀 Berhasil meluncurkan aplikasi **{app_name}** di laptop Anda."
@@ -1708,7 +1830,16 @@ class CommandHandler:
     async def handle_macro(self, args: list[str]) -> str:
         from agent.macro import macro_manager
         if not args:
-            return "Gunakan: !macro [record|play|save|list|delete] [nama]"
+            return ("Gunakan:\n"
+                    "  !macro record <nama>\n"
+                    "  !macro stop\n"
+                    "  !macro save <nama>\n"
+                    "  !macro play <nama>\n"
+                    "  !macro show <nama>\n"
+                    "  !macro remove <nama> <index>\n"
+                    "  !macro config onerror [abort|continue|retry]\n"
+                    "  !macro list\n"
+                    "  !macro delete <nama>")
         subcmd = args[0].lower()
         if subcmd == "record" and len(args) > 1:
             return macro_manager.record(args[1])
@@ -1718,11 +1849,26 @@ class CommandHandler:
             return macro_manager.save(args[1])
         elif subcmd == "play" and len(args) > 1:
             return macro_manager.play(args[1])
+        elif subcmd == "show" and len(args) > 1:
+            return macro_manager.show(args[1])
+        elif subcmd == "remove" and len(args) > 2 and args[2].isdigit():
+            return macro_manager.remove_action(args[1], int(args[2]))
+        elif subcmd == "config" and len(args) >= 3:
+            return macro_manager.config(args[1], args[2])
         elif subcmd == "list":
             return macro_manager.list_macros()
         elif subcmd in ("del", "delete") and len(args) > 1:
             return macro_manager.delete(args[1])
-        return "Gunakan: !macro [record|play|save|list|delete] [nama]"
+        return ("Gunakan:\n"
+                "  !macro record <nama>\n"
+                "  !macro stop\n"
+                "  !macro save <nama>\n"
+                "  !macro play <nama>\n"
+                "  !macro show <nama>\n"
+                "  !macro remove <nama> <index>\n"
+                "  !macro config onerror [abort|continue|retry]\n"
+                "  !macro list\n"
+                "  !macro delete <nama>")
 
     async def handle_schedule(self, args: list[str]) -> str:
         from agent.scheduler import scheduler
@@ -1730,12 +1876,29 @@ class CommandHandler:
             return scheduler.list_schedules()
         subcmd = args[0].lower()
         if subcmd == "add" and len(args) >= 3:
-            return scheduler.add(" ".join(args[1:-1]), args[-1])
+            rest = args[1:]
+            repeat = None
+            if len(rest) >= 3 and rest[-2] == "repeat":
+                repeat = rest[-1]
+                rest = rest[:-2]
+            time_str = rest[-1]
+            command_end = -1
+            if len(rest) >= 2 and rest[-2] == "in":
+                time_str = rest[-2] + " " + rest[-1]
+                command_end = -2
+            elif len(rest) >= 3 and rest[-3] == "in":
+                time_str = " ".join(rest[-3:])
+                command_end = -3
+            elif len(rest) >= 2 and rest[-2] == "every":
+                time_str = " ".join(rest[-2:])
+                command_end = -2
+            command = " ".join(rest[:command_end]) if command_end != -1 else " ".join(rest[:-1])
+            return scheduler.add(command, time_str, repeat=repeat)
         elif subcmd == "list":
             return scheduler.list_schedules()
         elif subcmd in ("del", "delete") and len(args) > 1 and args[1].isdigit():
             return scheduler.delete(int(args[1]))
-        return "Gunakan: !schedule add <perintah> <waktu/cron>. Contoh: !schedule add !focus on 25 08:00"
+        return "Gunakan: !schedule add <perintah> <waktu> [repeat <interval>]. Contoh: !schedule add !focus on 25 08:00 repeat daily"
 
     async def handle_voice_cmd(self, args: list[str]) -> str:
         from agent.voice_cmd import voice_cmd_manager
@@ -1929,7 +2092,7 @@ class CommandHandler:
         return set_power_profile(profile)
 
     async def handle_multi_monitor(self, args: list[str]) -> str:
-        from agent.multi_monitor import list_monitors, switch_monitor, arrange_monitors
+        from agent.multi_monitor import list_monitors, switch_monitor
         if not args:
             return list_monitors()
         subcmd = args[0].lower()
@@ -1942,8 +2105,7 @@ class CommandHandler:
             target = args[1] if len(args) > 1 else "auto"
             return switch_monitor(target)
         elif subcmd in ("arrange", "layout"):
-            layout = args[1] if len(args) > 1 else "grid"
-            return arrange_monitors(layout)
+            return "Fitur arrange monitor belum diimplementasi."
         return "Gunakan: !multi monitor [list|switch|arrange] [args]"
 
     async def handle_sleep(self, args: list[str]) -> str:
@@ -2040,15 +2202,20 @@ class CommandHandler:
     async def handle_focus(self, args: list[str]) -> str:
         """Focus mode — Pomodoro timer + block distractions."""
         from agent.focus import focus_manager
+        from agent.time_utils import parse_duration
         if not args:
             return focus_manager.get_remaining()
         subcmd = args[0].lower()
         if subcmd == "on":
-            minutes = int(args[1]) if len(args) > 1 and args[1].isdigit() else 25
+            if len(args) > 1:
+                seconds = parse_duration(args[1])
+                minutes = max(1, seconds // 60)
+            else:
+                minutes = 25
             return focus_manager.start(minutes)
         elif subcmd == "off":
             return focus_manager.stop()
-        return "Gunakan: !focus [on|off] [menit]"
+        return "Gunakan: !focus on [waktu] — contoh: !focus on, !focus on 30m, !focus on 2h, !focus on 45s"
 
     async def handle_workspace(self, args: list[str]) -> str:
         """Workspace manager — save/load desktop state."""
@@ -2067,24 +2234,6 @@ class CommandHandler:
             return workspace_manager.delete(ws_name)
         return "Subperintah tidak dikenal. Gunakan: save, load, list, delete"
 
-    async def handle_calendar(self, args: list[str]) -> str:
-        """Google Calendar integration."""
-        from agent.calendar_client import get_next_event, get_today_events, join_event, create_event
-        if not args:
-            return get_next_event()
-        subcmd = args[0].lower()
-        if subcmd in ("next", "today"):
-            return get_today_events()
-        elif subcmd == "list":
-            return get_next_event()
-        elif subcmd == "join":
-            query = " ".join(args[1:]) if len(args) > 1 else None
-            return join_event(query)
-        elif subcmd == "create":
-            summary = " ".join(args[1:]) if len(args) > 1 else "Event"
-            return create_event(summary)
-        return "Gunakan: !calendar [today|next|list|join|create]"
-
     async def handle_quicknote(self, args: list[str]) -> str:
         """Quick markdown note."""
         from agent.quicknote import create_note, list_notes
@@ -2101,26 +2250,50 @@ class CommandHandler:
             return "Gunakan: !browser [new|search|scroll|refresh|close] [args]"
         subcmd = args[0].lower()
         if subcmd == "new" and len(args) > 1:
+            if macro_manager.recording:
+                macro_manager.add_action({"action": "open_url", "url": " ".join(args[1:])})
             return browser_new(" ".join(args[1:]))
         elif subcmd == "search" and len(args) > 1:
-            return browser_search(" ".join(args[1:]))
+            query = " ".join(args[1:])
+            if macro_manager.recording:
+                url = f"https://www.google.com/search?q={query.replace(' ', '+')}"
+                macro_manager.add_action({"action": "open_url", "url": url})
+            return browser_search(query)
         elif subcmd == "scroll":
             direction = args[1] if len(args) > 1 and args[1] in ("up", "down") else "down"
+            if macro_manager.recording:
+                macro_manager.add_action({"action": "key", "key": f"page{direction}"})
             return browser_scroll(direction)
         elif subcmd == "refresh":
+            if macro_manager.recording:
+                macro_manager.add_action({"action": "key", "key": "f5"})
             return browser_refresh()
         elif subcmd == "close":
             tab = int(args[1]) if len(args) > 1 and args[1].isdigit() else None
+            if macro_manager.recording:
+                macro_manager.add_action({"action": "key", "key": f"browser_close_tab_{tab}" if tab else "browser_close_active"})
             return browser_close(tab)
         return "Subperintah tidak dikenal."
 
     async def handle_daily(self, args: list[str]) -> str:
-        """Daily activity report."""
+        """Daily activity report with AI analysis."""
         from agent.daily_report import generate_daily_report
+        from ai_module.fast_ai import fast_ai
         period = "today"
         if args and args[0].lower() == "yesterday":
             period = "yesterday"
-        return generate_daily_report(period)
+        raw_data = generate_daily_report(period)
+        if fast_ai.enabled:
+            try:
+                insight = await fast_ai.summarize(
+                    f"Data sistem laptop:\n{raw_data}",
+                    query="Analisis kesehatan sistem dan beri saran optimasi dalam bahasa Indonesia natural"
+                )
+                if insight:
+                    return f"{raw_data}\n\n🧠 Analisis:\n{insight}"
+            except Exception:
+                pass
+        return raw_data
 
     async def handle_reminder(self, args: list[str]) -> str:
         """Reminder system."""
@@ -2216,7 +2389,12 @@ class CommandHandler:
         elif subcmd == "status":
             return status_track()
         elif subcmd in ("report", "laporan"):
-            days = int(args[1]) if len(args) > 1 and args[1].isdigit() else 7
+            from agent.time_utils import parse_duration
+            if len(args) > 1:
+                seconds = parse_duration(args[1], default_unit="d")
+                days = max(1, seconds // 86400)
+            else:
+                days = 7
             return report_track(days)
         return "Gunakan: !time track [start|stop|status|report] [project]"
 
@@ -2284,6 +2462,7 @@ class CommandHandler:
 
     async def handle_activity_log(self, args: list[str]) -> str:
         from agent.activity_log import view_log
+        from agent.time_utils import parse_duration
         days = 1
         action_filter = None
         limit = 20
@@ -2291,12 +2470,20 @@ class CommandHandler:
             if args[0] == "log" and len(args) > 1:
                 args = args[1:]
             if args:
-                if args[0].isdigit():
-                    days = int(args[0])
-                elif args[0].startswith("--filter="):
+                if args[0].startswith("--filter="):
                     action_filter = args[0].split("=", 1)[1]
-                if len(args) > 1 and args[-1].isdigit():
-                    limit = int(args[-1])
+                else:
+                    try:
+                        seconds = parse_duration(args[0], default_unit="d")
+                        days = max(1, seconds // 86400)
+                    except ValueError:
+                        pass
+                if len(args) > 1:
+                    try:
+                        seconds = parse_duration(args[-1], default_unit="d")
+                        limit = max(1, seconds // 86400)
+                    except ValueError:
+                        pass
         return view_log(days, action_filter, limit)
 
     async def handle_vpn(self, args: list[str]) -> str:
@@ -2329,6 +2516,274 @@ class CommandHandler:
             return delete_tunnel(args[1])
         return "Gunakan: !tunnel [create|list|start|delete] [args]"
 
+    async def handle_scrape(self, args: list[str]) -> str:
+        from agent.scraper import scrape_url, smart_search, read_rss, add_scheduled_job, remove_scheduled_job, list_scheduled_jobs
+        if not args:
+            return ("Gunakan:\n"
+                    "  !scrape <url>                      — Ambil konten dari URL\n"
+                    "  !scrape search <query>             — Cari web + ambil konten hasil\n"
+                    "  !scrape rss <feed_url>             — Baca RSS feed\n"
+                    "  !scrape schedule <search|rss> <target> <interval_jam> — Jadwalkan scraping rutin\n"
+                    "  !scrape schedule list              — Lihat jadwal scraping\n"
+                    "  !scrape schedule remove <id>       — Hapus jadwal scraping")
+        subcmd = args[0].lower()
+
+        if subcmd == "search":
+            query = " ".join(args[1:])
+            if not query:
+                return "❌ Masukkan query pencarian."
+            return await smart_search(query, max_results=3)
+
+        elif subcmd in ("rss", "feed"):
+            feed_url = args[1] if len(args) > 1 else ""
+            if not feed_url.startswith("http"):
+                return "❌ Masukkan URL RSS feed yang valid."
+            return await read_rss(feed_url, limit=10)
+
+        elif subcmd == "schedule":
+            if len(args) > 1 and args[1] == "list":
+                jobs = list_scheduled_jobs()
+                if not jobs:
+                    return "Belum ada jadwal scraping."
+                lines = ["📅 Jadwal Scraping:"]
+                for j in jobs:
+                    tgt = j.get("query") or j.get("url", "")
+                    lines.append(f"  • {j['id']}: {j['type']} `{tgt}` (every {j.get('interval', 21600)//3600}h)")
+                return "\n".join(lines)
+            if len(args) > 1 and args[1] == "remove":
+                if len(args) < 3:
+                    return "❌ Gunakan: !scrape schedule remove <id>"
+                if remove_scheduled_job(args[2]):
+                    return f"Jadwal `{args[2]}` dihapus."
+                return f"Jadwal `{args[2]}` tidak ditemukan."
+            if len(args) >= 4:
+                sched_type = args[1]
+                target = args[2]
+                from agent.time_utils import parse_duration, format_duration
+                try:
+                    interval = parse_duration(args[3], default_unit="h")
+                except ValueError as e:
+                    return f"❌ {e}"
+                job_id = f"{sched_type}_{int(time.time())}"
+                add_scheduled_job(job_id, sched_type, target, interval)
+                return f"✅ Jadwal scraping '{job_id}' dibuat: {sched_type} `{target}` setiap {format_duration(interval)}."
+            return "❌ Format: !scrape schedule <search|rss> <target> <interval_jam>"
+
+        else:
+            url = args[0]
+            if url.startswith("http"):
+                result = await scrape_url(url, use_ai=True)
+                display = result.get("ai_summary") or result.get("content", "")
+                lines = [
+                    f"📄 {result.get('title', url)}",
+                    f"   {url}",
+                    "",
+                    display[:3000],
+                ]
+                return "\n".join(lines)
+            else:
+                query = " ".join(args)
+                return await smart_search(query, max_results=3, use_ai=True)
+            if "error" in result:
+                return result["error"]
+            display = result.get("ai_summary") or result.get("content", "")
+            lines = [
+                f"📄 **{result['title']}**",
+                f"   _{result['url']}_",
+                f"   📝 {result.get('word_count', 0)} kata | {'💾 CACHED' if result.get('cached') else '🆕 Fresh'}",
+                "",
+                display[:3000],
+            ]
+            return "\n".join(lines)
+
+    async def handle_memory(self, args: list[str]) -> str:
+        from agent.memory.manager import memory_manager
+        if not args:
+            return (
+                "📝 *Memory System*\n"
+                "`!memory search <query>` — Cari memory\n"
+                "`!memory summarize [topic]` — Ringkasan semua memory\n"
+                "`!memory forget <query>` — Hapus memory terkait\n"
+                "`!memory stats` — Statistik memory\n"
+                "`!memory sync` — Sinkron antar device"
+            )
+        sub = args[0].lower()
+        if sub == "search":
+            query = " ".join(args[1:])
+            if not query:
+                return "❌ Masukkan query pencarian."
+            results = memory_manager.search(query)
+            if not results:
+                return "🔍 Tidak ada hasil yang relevan."
+            lines = ["🔍 *Memory Search Results:*"]
+            for r in results[:5]:
+                score = f"{(1 - r['distance']) * 100:.0f}%" if r.get("distance") else "N/A"
+                lines.append(f"📌 `[{score}]` {r['text'][:200]}")
+            return "\n".join(lines)
+        elif sub == "summarize":
+            topic = " ".join(args[1:]) or None
+            return memory_manager.summarize_all(topic)
+        elif sub == "forget":
+            query = " ".join(args[1:])
+            return memory_manager.forget(query)
+        elif sub == "stats":
+            stats = memory_manager.stats()
+            return (
+                f"📊 *Memory Stats*\n"
+                f"Total entries: {stats['total_entries']}\n"
+                f"Topics: {', '.join(f'{t}({c})' for t, c in stats['topics'].items())}"
+            )
+        elif sub == "sync":
+            from agent.memory.sync import MemorySync
+            sync = MemorySync()
+            return sync.sync_all()
+        return "❌ Subperintah tidak dikenal."
+
+    async def handle_mcp(self, args: list[str]) -> str:
+        from agent.memory.mcp_collector import mcp_collector
+        if not args:
+            return (
+                "🧠 *Memory Context Provider (MCP)*\n"
+                "`!mcp on` — Aktifkan monitoring otomatis\n"
+                "`!mcp off` — Nonaktifkan\n"
+                "`!mcp status` — Status collector\n"
+                "`!mcp query [pertanyaan]` — Tanya konteks saat ini"
+            )
+        sub = args[0].lower()
+        if sub == "on":
+            await mcp_collector.start()
+            return "🟢 MCP Collector diaktifkan. Monitoring setiap 30 detik."
+        elif sub == "off":
+            await mcp_collector.stop()
+            return "🔴 MCP Collector dinonaktifkan."
+        elif sub == "status":
+            return f"{'🟢 Aktif' if mcp_collector.active else '🔴 Nonaktif'}"
+        elif sub == "query":
+            query = " ".join(args[1:])
+            context = mcp_collector.get_recent_context()
+            if query:
+                results = memory_manager.search(query, k=5)
+                if results:
+                    context += "\n\n🔍 *Memory Search:*\n" + "\n".join(
+                        f"• {r['text'][:200]}" for r in results
+                    )
+            return context or "Tidak ada konteks tersedia."
+        return "❌ Subperintah tidak dikenal."
+
+    async def handle_companion(self, args: list[str]) -> str:
+        from agent.companion import companion
+        if not args:
+            return "💬 Gunakan: `!companion <pesan>` untuk mengobrol dengan AI Companion."
+        message = " ".join(args)
+        return await companion.chat(message, "user")
+
+    async def handle_solve(self, args: list[str]) -> str:
+        from agent.solver import solver
+        if not args:
+            return "🔧 Gunakan: `!solve <problem>` untuk solusi masalah."
+        problem = " ".join(args)
+        return await solver.solve(problem)
+
+    async def handle_create_feature(self, args: list[str]) -> str:
+        from agent.self_feature import self_feature_engine
+        if not args:
+            return (
+                "🧬 *Self-Feature Generation*\n"
+                "`!create feature <deskripsi>` — Buat fitur baru dari AI\n"
+                "`!create list` — Lihat fitur kustom terinstal"
+            )
+        if args[0].lower() == "list":
+            features = self_feature_engine.list_features()
+            if not features:
+                return "Belum ada fitur kustom yang dibuat."
+            lines = ["🧬 *Fitur Kustom Terinstal:*"]
+            for f in features:
+                lines.append(f"• `!{f['name']}` — {f['description']} ({f['installed_at'][:10]})")
+            return "\n".join(lines)
+        description = " ".join(args)
+        result = await self_feature_engine.generate_feature(description)
+        if "error" in result:
+            return f"❌ {result['error']}"
+        feature_name = result["feature_name"]
+        return (
+            f"🧬 *Generate Fitur Baru: `!{feature_name}`*\n\n"
+            f"Deskripsi: {result.get('description', '-')}\n"
+            f"Dependensi: {', '.join(result.get('dependencies', [])) or 'tidak ada'}\n\n"
+            f"⚠️ Akan memodifikasi: command_handler.py, command_router.py, allowed_commands.yaml, fallback_parser.py\n\n"
+            f"Ketik `!create confirm {feature_name}` untuk melanjutkan,\n"
+            f"atau `!create cancel` untuk membatalkan."
+        )
+
+    async def handle_self_evolve(self, args: list[str]) -> str:
+        from agent.evolution import evolution_engine
+        if not args:
+            return (
+                "🧬 *Self-Evolution Engine*\n"
+                "`!self evolve` — Jalankan evolusi sekarang\n"
+                "`!self evolve history` — Lihat riwayat evolusi\n"
+                "`!self evolve auto` — Jadwalkan otomatis setiap malam"
+            )
+        sub = args[0].lower()
+        if sub == "history":
+            days = int(args[1]) if len(args) > 1 and args[1].isdigit() else 7
+            return evolution_engine.get_history(days)
+        elif sub == "auto":
+            from agent.scheduler import scheduler
+            scheduler.add_schedule("daily at 00:00 !self evolve")
+            return "🕛 Self-evolution dijadwalkan otomatis setiap tengah malam."
+        return await evolution_engine.run_evolution()
+
+    async def handle_optimize_me(self, args: list[str]) -> str:
+        from agent.optimizer import optimizer
+        return await optimizer.generate_advice()
+
+    async def handle_proactive(self, args: list[str]) -> str:
+        from agent.proactive import proactive_engine
+        if not args:
+            return (
+                "🔔 *Proactive Mode*\n"
+                "`!proactive on` — Aktifkan notifikasi proaktif\n"
+                "`!proactive off` — Nonaktifkan\n"
+                "`!proactive status` — Status saat ini"
+            )
+        sub = args[0].lower()
+        if sub == "on":
+            await proactive_engine.start()
+            return "🔔 Proactive mode diaktifkan."
+        elif sub == "off":
+            await proactive_engine.stop()
+            return "🔕 Proactive mode dinonaktifkan."
+        elif sub == "status":
+            return f"{'🔔 Aktif' if proactive_engine.active else '🔕 Nonaktif'}"
+        return "❌ Subperintah tidak dikenal."
+
+    async def handle_learn(self, args: list[str]) -> str:
+        from agent.knowledge import knowledge_engine
+        if not args:
+            return (
+                "📚 *Knowledge Enrichment*\n"
+                "`!learn <topik>` — Cari dan simpen artikel tentang topik\n"
+                "`!learn list` — Lihat topik yang sudah dipelajari"
+            )
+        if args[0].lower() == "list":
+            return knowledge_engine.list_topics()
+        topic = " ".join(args)
+        return await knowledge_engine.learn(topic)
+
+    async def handle_agent_mode(self, args: list[str]) -> str:
+        from agent.autonomous_agent import autonomous_agent
+        if not args:
+            return (
+                "🤖 *Autonomous Agent Mode*\n"
+                "`!agent <goal>` — Jalankan agent untuk goal tertentu\n"
+                "`!agent stop` — Hentikan agent yang sedang berjalan"
+            )
+        if args[0].lower() == "stop":
+            autonomous_agent.stop()
+            return "⏹️ Agent dihentikan."
+        goal = " ".join(args)
+        return await autonomous_agent.run(goal, "user")
+
     async def handle_ai_agent(self, args: list[str]) -> str:
         from agent.ai_agent import run_agent, get_history, clear_history
         if not args:
@@ -2341,4 +2796,170 @@ class CommandHandler:
         task = " ".join(args)
         return await run_agent(task)
 
+    async def handle_internet_brain(self, args: list[str]) -> str:
+        from agent.internet_brain import internet_brain
+        if not args:
+            return (
+                "🧠 *Internet Brain*\n"
+                "`!internet_brain <query>` — Jawab pertanyaan dengan pengetahuan internet\n"
+                "`!otak_internet <query>` — Alias Indonesia"
+            )
+        query = " ".join(args)
+        return await internet_brain.answer(query)
 
+    async def handle_live_web(self, args: list[str]) -> str:
+        from agent.live_web import live_web
+        if not args:
+            return (
+                "🌐 *Live Web*\n"
+                "`!live_web <query>` — Cari informasi real-time dari internet\n"
+                "`!web_langsung <query>` — Alias Indonesia"
+            )
+        query = " ".join(args)
+        return await live_web.search(query)
+
+    async def handle_deep_scrape(self, args: list[str]) -> str:
+        from agent.deep_scrape import deep_scraper
+        if not args:
+            return (
+                "🔍 *Deep Scrape*\n"
+                "`!deep_scrape <url> [task]` — Analisis mendalam halaman web\n"
+                "`!scrape_dalam <url> [task]` — Alias Indonesia"
+            )
+        url = args[0]
+        task = " ".join(args[1:]) if len(args) > 1 else ""
+        return await deep_scraper.analyze(url, task)
+
+    async def handle_research(self, args: list[str]) -> str:
+        from agent.research import research_engine
+        if not args:
+            return (
+                "📚 *Research Engine*\n"
+                "`!research <topik> [light|medium|deep]` — Riset komprehensif\n"
+                "`!riset <topik> [ringan|sedang|mendalam]` — Alias Indonesia"
+            )
+        topic = " ".join(args)
+        depth = "medium"
+        if args[-1].lower() in ("light", "ringan"):
+            depth = "light"
+            topic = " ".join(args[:-1])
+        elif args[-1].lower() in ("medium", "sedang"):
+            depth = "medium"
+            topic = " ".join(args[:-1])
+        elif args[-1].lower() in ("deep", "mendalam"):
+            depth = "deep"
+            topic = " ".join(args[:-1])
+        if not topic.strip():
+            return "❌ Masukkan topik riset."
+        return await research_engine.research(topic, depth)
+
+    async def handle_verify_fact(self, args: list[str]) -> str:
+        from agent.fact_checker import fact_checker
+        if not args:
+            return (
+                "✅ *Fact Checker*\n"
+                "`!verify_fact <pernyataan>` — Verifikasi kebenaran informasi\n"
+                "`!cek_fakta <pernyataan>` — Alias Indonesia"
+            )
+        claim = " ".join(args)
+        return await fact_checker.verify(claim)
+
+    async def handle_news_digest(self, args: list[str]) -> str:
+        from agent.news_digest import news_digest
+        if not args:
+            return (
+                "📰 *News Digest*\n"
+                "`!news_digest <topik>` — Ringkasan berita terkini\n"
+                "`!ringkasan_berita <topik>` — Alias Indonesia"
+            )
+        topic = " ".join(args)
+        return await news_digest.digest(topic)
+
+    async def handle_trend_hunter(self, args: list[str]) -> str:
+        from agent.trend_hunter import trend_hunter
+        if not args:
+            return (
+                "🔥 *Trend Hunter*\n"
+                "`!trend_hunter <topik>` — Identifikasi tren terbaru\n"
+                "`!pemburu_tren <topik>` — Alias Indonesia"
+            )
+        topic = " ".join(args)
+        return await trend_hunter.hunt(topic)
+
+    async def handle_comparator(self, args: list[str]) -> str:
+        from agent.comparator import comparator
+        if not args:
+            return (
+                "⚖️ *Comparator*\n"
+                "`!comparator <item A> vs <item B>` — Bandingkan dua item\n"
+                "`!pembanding <item A> vs <item B>` — Alias Indonesia\n"
+                "Contoh: `!comparator RTX 4060 vs RTX 4070`"
+            )
+        text = " ".join(args)
+        if " vs " in text:
+            parts = text.split(" vs ", 1)
+            return await comparator.compare(parts[0].strip(), parts[1].strip())
+        return await comparator.compare(text)
+
+    async def handle_qna(self, args: list[str]) -> str:
+        from agent.qna import qna_engine
+        if not args:
+            return (
+                "📚 *Advanced Q&A*\n"
+                "`!qna <pertanyaan>` — Tanya jawab dengan konteks memory + web\n"
+                "`!tanya <pertanyaan>` — Alias Indonesia"
+            )
+        return await qna_engine.answer(" ".join(args))
+
+    async def handle_generate_image(self, args: list[str]) -> str:
+        from agent.generate_image import image_generator
+        if not args:
+            return (
+                "🎨 *Generate Image*\n"
+                "`!generate_image <deskripsi>` — Generate prompt & deskripsi gambar\n"
+                "`!gambar <deskripsi>` — Alias Indonesia"
+            )
+        return await image_generator.generate(" ".join(args))
+
+    async def handle_translate(self, args: list[str]) -> str:
+        from agent.translate import translator
+        if not args:
+            return (
+                "🌐 *Translator*\n"
+                "`!translate <teks>` — Terjemahkan teks ke Indonesia\n"
+                "`!terjemah <teks>` — Alias Indonesia\n"
+                "Gunakan: `!translate <teks> ke <bahasa>` untuk target tertentu"
+            )
+        text = " ".join(args)
+        target_lang = "Indonesia"
+        if " ke " in text:
+            parts = text.split(" ke ", 1)
+            text = parts[0].strip()
+            target_lang = parts[1].strip()
+        return await translator.translate(text, target_lang=target_lang)
+
+    async def handle_explain(self, args: list[str]) -> str:
+        from agent.explain import explainer
+        if not args:
+            return (
+                "📖 *Explainer*\n"
+                "`!explain <konsep> [basic|medium|advanced]` — Jelaskan konsep\n"
+                "`!jelaskan <konsep> [dasar|menengah|lanjutan]` — Alias Indonesia"
+            )
+        topic = " ".join(args)
+        level = "medium"
+        level_map = {"basic": "basic", "dasar": "basic", "medium": "medium", "menengah": "medium", "advanced": "advanced", "lanjutan": "advanced"}
+        last = args[-1].lower()
+        if last in level_map:
+            level = level_map[last]
+            topic = " ".join(args[:-1])
+        if not topic.strip():
+            return "❌ Masukkan konsep yang akan dijelaskan."
+        return await explainer.explain(topic, level)
+
+    async def handle_proactive_suggest(self, args: list[str]) -> str:
+        from agent.proactive_suggest import proactive_suggester
+        context = " ".join(args) if args else ""
+        return await proactive_suggester.suggest(context)
+
+ 

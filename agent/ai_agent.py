@@ -22,13 +22,15 @@ async def run_agent(task: str) -> str:
     api_key = os.getenv("NVIDIA_NIM_API_KEY")
     if not api_key:
         return "NVIDIA_NIM_API_KEY tidak ditemukan di .env. AI Agent tidak bisa dijalankan."
+    model = os.getenv("NVIDIA_NIM_MODEL", "meta/llama-3.1-8b-instruct")
+    base_url = os.getenv("NVIDIA_NIM_BASE_URL", "https://integrate.api.nvidia.com/v1")
     try:
         async with httpx.AsyncClient(timeout=60) as client:
             resp = await client.post(
-                "https://integrate.api.nvidia.com/v1/chat/completions",
+                f"{base_url}/chat/completions",
                 headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
                 json={
-                    "model": "meta/llama3-70b-instruct",
+                    "model": model,
                     "messages": [
                         {"role": "system", "content": "Kamu adalah AI agent yang membantu mengerjakan tugas kompleks di Linux desktop. Berikan jawaban yang langsung bisa dijalankan sebagai perintah shell atau langkah-langkah konkret. Jawab dalam Bahasa Indonesia."},
                         {"role": "user", "content": task}
@@ -37,7 +39,9 @@ async def run_agent(task: str) -> str:
                     "max_tokens": 1024
                 }
             )
-            result = resp.json()["choices"][0]["message"]["content"]
+            resp.raise_for_status()
+            data = resp.json()
+            result = data["choices"][0]["message"]["content"]
             history = _load_history()
             history.append({"task": task, "result": result, "timestamp": __import__('datetime').datetime.now().isoformat()})
             _save_history(history)

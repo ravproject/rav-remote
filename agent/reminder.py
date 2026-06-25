@@ -1,10 +1,7 @@
 """
 Reminder System — desktop + Telegram notification scheduler.
 """
-import asyncio
 import json
-import os
-import subprocess
 from pathlib import Path
 from datetime import datetime, timedelta
 from loguru import logger
@@ -30,27 +27,19 @@ class ReminderManager:
             json.dump(self.reminders, f, indent=2)
 
     def add(self, text: str, time_str: str) -> str:
+        from agent.time_utils import parse_duration
         now = datetime.now()
         target = None
         try:
-            time_str = time_str.lower().strip()
-            if "jam" in time_str:
-                hours = int(time_str.replace("jam", "").strip())
-                target = now + timedelta(hours=hours)
-            elif "h" in time_str:
-                hours = int(time_str.replace("h", "").strip())
-                target = now + timedelta(hours=hours)
-            elif "menit" in time_str:
-                minutes = int(time_str.replace("menit", "").strip())
-                target = now + timedelta(minutes=minutes)
-            elif "m" in time_str:
-                minutes = int(time_str.replace("m", "").strip())
-                target = now + timedelta(minutes=minutes)
-            elif ":" in time_str:
-                parts = time_str.split(":")
+            ts = time_str.lower().strip()
+            if ":" in ts:
+                parts = ts.split(":")
                 target = now.replace(hour=int(parts[0]), minute=int(parts[1]), second=0)
                 if target < now:
                     target += timedelta(days=1)
+            else:
+                seconds = parse_duration(ts)
+                target = now + timedelta(seconds=seconds)
         except Exception as e:
             return f"Format waktu tidak dikenal: {e}. Gunakan: '30m', '2jam', '14:30'"
         if not target:
@@ -82,27 +71,29 @@ class ReminderManager:
             return f"Pengingat '{removed['text']}' dihapus."
         return "Nomor tidak valid."
 
-    async def check_loop(self, notify_func):
-        while True:
-            now = datetime.now()
-            triggered = []
-            for r in self.reminders:
-                if not r.get("done"):
-                    try:
-                        t = datetime.fromisoformat(r["time"])
-                        if now >= t:
-                            r["done"] = True
-                            triggered.append(r["text"])
-                    except Exception:
-                        pass
-            if triggered:
-                self._save()
-                for text in triggered:
-                    await notify_func(text)
-                    try:
-                        subprocess.run(["notify-send", "RAV-REMOTE Reminder", text], timeout=3)
-                    except Exception:
-                        pass
-            await asyncio.sleep(30)
-
 reminder_manager = ReminderManager()
+reminder_alerts = []
+
+def check_reminders():
+    """Check due reminders, send alerts, and mark them as done."""
+    now = datetime.now()
+    triggered = []
+    for r in reminder_manager.reminders:
+        if not r.get("done"):
+            try:
+                t = datetime.fromisoformat(r["time"])
+                if now >= t:
+                    r["done"] = True
+                    triggered.append(r["text"])
+            except Exception:
+                pass
+    if triggered:
+        reminder_manager._save()
+        for text in triggered:
+            reminder_alerts.append(f"⏰ Pengingat: {text}")
+            try:
+                from agent.notifier import send_notification
+                if not send_notification("RAV-REMOTE Reminder", text):
+                    logger.warning(f"Desktop notification failed for reminder: {text}")
+            except Exception as e:
+                logger.warning(f"Desktop notification error for reminder '{text}': {e}")

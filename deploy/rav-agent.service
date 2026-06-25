@@ -1,0 +1,16 @@
+[Unit]
+Description=RAV Remote Laptop Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=rav
+WorkingDirectory=/home/rav/Development/RAV-REMOTE
+ExecStart=/home/rav/Development/RAV-REMOTE/deploy/start-agent.sh
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

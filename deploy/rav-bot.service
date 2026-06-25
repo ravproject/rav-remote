@@ -1,0 +1,17 @@
+[Unit]
+Description=RAV Remote Telegram Bot
+After=network-online.target rav-agent.service
+Wants=network-online.target
+BindsTo=rav-agent.service
+
+[Service]
+Type=simple
+User=rav
+WorkingDirectory=/home/rav/Development/RAV-REMOTE
+ExecStart=/home/rav/Development/RAV-REMOTE/deploy/start-bot.sh
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

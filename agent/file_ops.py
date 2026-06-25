@@ -4,9 +4,12 @@ File Operations — quick upload, recent files, content search, convert, organiz
 import os
 import shutil
 import hashlib
+import tempfile
 from pathlib import Path
 from datetime import datetime, timedelta
 from loguru import logger
+
+from agent.platform_utils import IS_LINUX, IS_MACOS, IS_WINDOWS, get_platform_paths
 
 UPLOAD_DIR = Path.home() / "Downloads" / "rav-remote"
 
@@ -14,14 +17,21 @@ def quick_upload() -> str:
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     return f"📁 Folder upload siap: {UPLOAD_DIR}\nKirim file dari HP untuk diupload ke folder ini."
 
+EXCLUDE_DIRS = {"__pycache__", "node_modules", "venv", ".git", "__pycache__"}
+EXCLUDE_EXTS = {".pyc", ".pyo", ".cache"}
+
 def recent_files(item_type: str = "files", count: int = 10) -> str:
     home = Path.home()
     count = min(count, 50)
     items = []
     for p in home.rglob("*"):
-        if p.is_symlink() or any(part.startswith(".") for part in p.parts):
+        if p.is_symlink():
+            continue
+        if any(part.startswith(".") or part in EXCLUDE_DIRS for part in p.parts):
             continue
         if item_type == "files" and p.is_file():
+            if p.suffix.lower() in EXCLUDE_EXTS:
+                continue
             items.append((p.stat().st_mtime, p))
         elif item_type == "folders" and p.is_dir():
             items.append((p.stat().st_mtime, p))
@@ -43,18 +53,21 @@ def search_content(keyword: str, folder: str = None) -> str:
     text_exts = {".txt", ".md", ".py", ".js", ".ts", ".json", ".yaml", ".yml", ".xml",
                  ".html", ".css", ".cfg", ".conf", ".ini", ".log", ".csv", ".sh", ".env"}
     for p in search_root.rglob("*"):
-        if p.is_file() and p.suffix.lower() in text_exts:
-            try:
-                if p.stat().st_size > 1024 * 100:
-                    continue
-                content = p.read_text(errors="ignore")
-                if keyword.lower() in content.lower():
-                    rel = p.relative_to(search_root) if p != search_root else p.name
-                    results.append(f"📄 {rel}")
-                    if len(results) >= 20:
-                        break
-            except Exception:
-                pass
+        if not p.is_file() or p.suffix.lower() not in text_exts:
+            continue
+        if any(part.startswith(".") or part in EXCLUDE_DIRS for part in p.parts):
+            continue
+        try:
+            if p.stat().st_size > 1024 * 100:
+                continue
+            content = p.read_text(errors="ignore")
+            if keyword.lower() in content.lower():
+                rel = p.relative_to(search_root) if p != search_root else p.name
+                results.append(f"📄 {rel}")
+                if len(results) >= 20:
+                    break
+        except Exception:
+            pass
     if not results:
         return f"🔍 Tidak ditemukan konten '{keyword}' di {search_root}."
     return f"🔍 Hasil pencarian '{keyword}' di {search_root}:\n" + "\n".join(results)
@@ -111,20 +124,28 @@ def organize_folder(folder: str, method: str = "type") -> str:
             logger.error(f"Gagal memindah {f.name}: {e}")
     return f"📂 {moved} file diorganisir ke subfolder berdasarkan {method} di {target}."
 
+def _get_clean_dirs() -> list[Path]:
+    paths = get_platform_paths()
+    dirs = [Path(tempfile.gettempdir())]
+    if IS_LINUX:
+        dirs += [Path.home() / ".cache", Path.home() / ".local/share/Trash"]
+    elif IS_MACOS:
+        dirs += [Path.home() / "Library/Caches", Path.home() / ".Trash"]
+    elif IS_WINDOWS:
+        dirs += [Path(os.environ.get("TEMP", "C:\\Windows\\Temp")),
+                 Path.home() / "AppData/Local/Temp"]
+    return dirs
+
+
 def clean_disk(scope: str = "all") -> str:
     freed = 0
     reports = []
     if scope in ("temp", "all"):
-        temp_dirs = [
-            Path("/tmp"),
-            Path.home() / ".cache",
-            Path.home() / ".local/share/Trash",
-        ]
-        for d in temp_dirs:
+        for d in _get_clean_dirs():
             if d.exists():
                 try:
                     size_before = sum(f.stat().st_size for f in d.rglob("*") if f.is_file())
-                    shutil.rmtree(d)
+                    shutil.rmtree(d, ignore_errors=True)
                     d.mkdir(exist_ok=True)
                     freed += size_before
                     reports.append(f"🧹 {d}: {size_before // 1024 // 1024} MB")
@@ -132,19 +153,23 @@ def clean_disk(scope: str = "all") -> str:
                     reports.append(f"⚠️ {d}: {e}")
     if scope in ("cache", "all"):
         pip_cache = Path.home() / ".cache/pip"
+        if IS_WINDOWS:
+            pip_cache = Path.home() / "AppData/Local/pip/cache"
         if pip_cache.exists():
             try:
                 size = sum(f.stat().st_size for f in pip_cache.rglob("*") if f.is_file())
-                shutil.rmtree(pip_cache)
+                shutil.rmtree(pip_cache, ignore_errors=True)
                 freed += size
                 reports.append(f"🧹 pip cache: {size // 1024 // 1024} MB")
             except Exception:
                 pass
         npm_cache = Path.home() / ".npm"
+        if IS_WINDOWS:
+            npm_cache = Path(os.environ.get("APPDATA", "")) / "npm-cache"
         if npm_cache.exists():
             try:
                 size = sum(f.stat().st_size for f in npm_cache.rglob("*") if f.is_file())
-                shutil.rmtree(npm_cache)
+                shutil.rmtree(npm_cache, ignore_errors=True)
                 freed += size
                 reports.append(f"🧹 npm cache: {size // 1024 // 1024} MB")
             except Exception:

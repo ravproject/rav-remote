@@ -7,10 +7,7 @@ Type=simple
 User=rav
 WorkingDirectory=/home/rav/Development/RAV-REMOTE
 EnvironmentFile=/home/rav/Development/RAV-REMOTE/.env
-Environment=DISPLAY=:0
-Environment=WAYLAND_DISPLAY=wayland-0
-Environment=XAUTHORITY=/run/user/1000/.mutter-Xwaylandauth.0HDKQ3
-ExecStart=/home/rav/Development/RAV-REMOTE/venv/bin/python -m agent.main
+ExecStart=/home/rav/Development/RAV-REMOTE/deploy/start-agent.sh
 Restart=on-failure
 RestartSec=5s
 

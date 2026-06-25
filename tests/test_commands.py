@@ -15,7 +15,7 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
     async def test_handle_screenshot(self, mock_take_screenshot):
         result = await self.handler.handle_screenshot(grid=True)
         self.assertEqual(result, b'screenshot_bytes')
-        mock_take_screenshot.assert_called_with(True)
+        mock_take_screenshot.assert_called_with(True, -1)
 
     @patch('agent.command_handler.sys_monitor.get_system_summary', return_value='system_info')
     async def test_handle_sysinfo(self, mock_get_system_info):

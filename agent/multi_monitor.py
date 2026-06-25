@@ -1,68 +1,69 @@
-"""
-Multi Monitor — list, switch, arrange displays.
-"""
 import subprocess
 import shutil
 from loguru import logger
 
+from agent.platform_utils import IS_LINUX, IS_MACOS, IS_WINDOWS, has_tool
+
+
 def list_monitors() -> str:
-    if shutil.which("xrandr"):
+    if IS_LINUX and has_tool("xrandr"):
         try:
-            res = subprocess.run(["xrandr", "--listmonitors"], capture_output=True, text=True, timeout=5)
-            return f"🖥️ Monitor:\n{res.stdout.strip()}"
+            r = subprocess.run(["xrandr", "--listmonitors"], capture_output=True, text=True, timeout=5)
+            return f"Monitor:\n{r.stdout.strip()}"
         except Exception as e:
             return f"Gagal: {e}"
-    return "xrandr tidak ditemukan."
+    elif IS_MACOS:
+        try:
+            r = subprocess.run(["system_profiler", "SPDisplaysDataType"],
+                               capture_output=True, text=True, timeout=10)
+            lines = [l.strip() for l in r.stdout.split("\n") if "Resolution" in l or "Display" in l]
+            return "Monitor:\n" + "\n".join(lines[:10]) if lines else "Gunakan system_profiler untuk detail."
+        except Exception as e:
+            return f"Gagal: {e}"
+    elif IS_WINDOWS:
+        try:
+            import ctypes
+            user32 = ctypes.windll.user32
+            count = user32.GetSystemMetrics(80)  # SM_CMONITORS
+            w = user32.GetSystemMetrics(0)
+            h = user32.GetSystemMetrics(1)
+            return f"Monitor: {count} detected, primary: {w}x{h}"
+        except Exception as e:
+            return f"Gagal: {e}"
+    return "Fitur monitor belum didukung di OS ini."
+
 
 def switch_monitor(target: str = "auto") -> str:
-    if not shutil.which("xrandr"):
-        return "xrandr tidak ditemukan."
-    try:
-        res = subprocess.run(["xrandr"], capture_output=True, text=True, timeout=5)
-        lines = res.stdout.split("\n")
-        connected = []
-        for line in lines:
-            if " connected " in line:
-                connected.append(line.split()[0])
-        if not connected:
-            return "Tidak ada monitor terdeteksi."
-        if target == "auto":
-            return f"Monitor terdeteksi: {', '.join(connected)}. Gunakan: !multi monitor switch <nama>"
-        if target in connected:
-            subprocess.run(["xrandr", "--output", target, "--auto"], capture_output=True, timeout=5)
-            return f"Monitor {target} diaktifkan."
-        return f"Monitor '{target}' tidak ditemukan. Tersedia: {', '.join(connected)}"
-    except Exception as e:
-        return f"Gagal: {e}"
-
-def arrange_monitors(layout: str = "grid") -> str:
-    if not shutil.which("xrandr"):
-        return "xrandr tidak ditemukan."
-    try:
-        res = subprocess.run(["xrandr"], capture_output=True, text=True, timeout=5)
-        lines = res.stdout.split("\n")
-        monitors = [line.split()[0] for line in lines if " connected " in line]
-        if len(monitors) < 2:
-            return f"Hanya 1 monitor terdeteksi. Tidak perlu diatur."
-        if layout == "grid":
-            import math
-            cols = math.ceil(math.sqrt(len(monitors)))
-            for i, m in enumerate(monitors):
-                x = (i % cols) * 1920
-                y = (i // cols) * 1080
-                subprocess.run(["xrandr", "--output", m, "--pos", f"{x}x{y}"], capture_output=True, timeout=5)
-            return f"Monitor diatur grid {cols}x{math.ceil(len(monitors)/cols)}."
-        elif layout == "horizontal":
-            x = 0
-            for m in monitors:
-                subprocess.run(["xrandr", "--output", m, "--pos", f"{x}x0"], capture_output=True, timeout=5)
-                x += 1920
-            return f"Monitor diatur horizontal."
-        elif layout == "mirror":
-            primary = monitors[0]
-            for m in monitors[1:]:
-                subprocess.run(["xrandr", "--output", m, "--same-as", primary], capture_output=True, timeout=5)
-            return f"Monitor di-mirror ke {primary}."
-        return f"Layout tidak dikenal: {layout}. Gunakan: grid, horizontal, mirror"
-    except Exception as e:
-        return f"Gagal: {e}"
+    if IS_LINUX and has_tool("xrandr"):
+        try:
+            r = subprocess.run(["xrandr"], capture_output=True, text=True, timeout=5)
+            connected = [l.split()[0] for l in r.stdout.split("\n") if " connected " in l]
+            if not connected:
+                return "Tidak ada monitor terdeteksi."
+            if target == "auto":
+                return f"Monitor: {', '.join(connected)}. Gunakan: !multi monitor switch <nama>"
+            if target in connected:
+                subprocess.run(["xrandr", "--output", target, "--primary", "--auto"],
+                               capture_output=True, timeout=5)
+                others = [m for m in connected if m != target]
+                for m in others:
+                    subprocess.run(["xrandr", "--output", m, "--off"], capture_output=True, timeout=3)
+                return f"Monitor '{target}' diaktifkan."
+            return f"Monitor '{target}' tidak terdeteksi. Tersedia: {', '.join(connected)}"
+        except Exception as e:
+            return f"Gagal: {e}"
+    elif IS_MACOS:
+        try:
+            subprocess.run(["osascript", "-e",
+                           f'do shell script "open -a System\\ Settings" with administrator privileges'],
+                           capture_output=True, timeout=5)
+            return "Buka System Settings > Displays untuk atur monitor."
+        except Exception:
+            return "Atur monitor manual via System Settings."
+    elif IS_WINDOWS:
+        try:
+            subprocess.run(["DisplaySwitch.exe", "/extend"], capture_output=True, timeout=5)
+            return "Monitor mode: extend."
+        except Exception:
+            return "Gunakan Win+P untuk atur monitor."
+    return "Fitur switch monitor belum didukung."

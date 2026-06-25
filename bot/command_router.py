@@ -5,6 +5,7 @@ from ai_module.nim_client import CommandInterpreter
 from agent.command_handler import CommandHandler
 from security.audit_logger import AuditLogger
 from security.sanitizer import InputSanitizer
+from ai_module.vision_ai import vision_ai
 from pathlib import Path
 import base64
 from loguru import logger
@@ -44,18 +45,48 @@ class CommandRouter:
             return f"❌ Perintah `{command_name}` tidak ada dalam whitelist keamanan."
 
         try:
-            if command_name == "screenshot":
-                use_grid = len(args) > 0 and args[0].lower() == "grid"
-                res = await self.handler.handle_screenshot(grid=use_grid)
-                self.auditor.log_event(user_id, "SCREENSHOT", "grid" if use_grid else "")
+            if command_name in ("screenshot", "ss"):
+                use_grid = False
+                monitor = -1
+                analyze = False
+                for a in args:
+                    al = a.lower()
+                    if al == "grid":
+                        use_grid = True
+                    elif al == "describe" or al == "ai":
+                        analyze = True
+                    elif al == "mon0":
+                        monitor = 0
+                    elif al == "mon1":
+                        monitor = 1
+                    elif al == "mon2":
+                        monitor = 2
+                    elif al == "all":
+                        monitor = -1
+                    elif al.isdigit():
+                        monitor = int(al)
+                    elif al.startswith("mon") and al[3:].isdigit():
+                        monitor = int(al[3:])
+                res = await self.handler.handle_screenshot(grid=use_grid, monitor=monitor)
+                detail = f"grid={use_grid} mon={monitor}"
+                self.auditor.log_event(user_id, "SCREENSHOT", detail)
                 if isinstance(res, bytes):
-                    return {"type": "photo", "data": res}
+                    result = {"type": "photo", "data": res}
+                    if analyze and vision_ai.enabled:
+                        desc = await vision_ai.describe(res)
+                        if desc:
+                            result["caption"] = f"🤖 <b>Analisis Screenshot:</b>\n{desc}"
+                    return result
                 return res # Return error message string
 
             elif command_name == "video":
                 duration = 5
-                if args and args[0].isdigit():
-                    duration = min(int(args[0]), 30) # Max 30s for smoothness
+                if args:
+                    try:
+                        from agent.time_utils import parse_duration
+                        duration = min(parse_duration(args[0], default_unit="s"), 30)
+                    except ValueError:
+                        duration = 5
                 res = await self.handler.handle_video(duration)
                 self.auditor.log_event(user_id, "VIDEO", f"duration={duration}")
                 return res or "❌ Gagal merekam video."
@@ -68,7 +99,13 @@ class CommandRouter:
                 return res or "❌ Gagal mengambil foto webcam (kamera digunakan atau tidak ada)."
 
             elif command_name == "webcamvid":
-                duration = int(args[0]) if args and args[0].isdigit() else 5
+                duration = 5
+                if args:
+                    try:
+                        from agent.time_utils import parse_duration
+                        duration = parse_duration(args[0], default_unit="s")
+                    except ValueError:
+                        duration = 5
                 res = await self.handler.handle_webcam_video(duration)
                 self.auditor.log_event(user_id, "WEBCAM_VIDEO", f"duration={duration}")
                 if isinstance(res, bytes):
@@ -178,8 +215,12 @@ class CommandRouter:
 
             elif command_name == "listen":
                 duration = 5
-                if args and args[0].isdigit():
-                    duration = min(int(args[0]), 30)
+                if args:
+                    try:
+                        from agent.time_utils import parse_duration
+                        duration = min(parse_duration(args[0], default_unit="s"), 30)
+                    except ValueError:
+                        duration = 5
                 res = await self.handler.handle_listen(duration)
                 self.auditor.log_event(user_id, "LISTEN", f"duration={duration}")
                 return res or "❌ Gagal merekam audio."
@@ -238,6 +279,73 @@ class CommandRouter:
                 self.auditor.log_event(user_id, "PRESS", key)
                 return res
 
+            elif command_name == "rightclick":
+                if len(args) < 2:
+                    return "❌ Gunakan: !rightclick <x> <y>"
+                try:
+                    x, y = int(args[0]), int(args[1])
+                except ValueError:
+                    return "❌ Koordinat harus berupa angka."
+                res = await self.handler.handle_rightclick(x, y)
+                self.auditor.log_event(user_id, "RIGHTCLICK", f"x={x}, y={y}")
+                return res
+
+            elif command_name == "doubleclick":
+                if len(args) < 2:
+                    return "❌ Gunakan: !doubleclick <x> <y>"
+                try:
+                    x, y = int(args[0]), int(args[1])
+                except ValueError:
+                    return "❌ Koordinat harus berupa angka."
+                res = await self.handler.handle_doubleclick(x, y)
+                self.auditor.log_event(user_id, "DOUBLECLICK", f"x={x}, y={y}")
+                return res
+
+            elif command_name in ("drag", "dragdrop"):
+                if len(args) < 4:
+                    return "❌ Gunakan: !drag <x1> <y1> <x2> <y2>"
+                try:
+                    x1, y1, x2, y2 = int(args[0]), int(args[1]), int(args[2]), int(args[3])
+                except ValueError:
+                    return "❌ Koordinat harus berupa angka."
+                res = await self.handler.handle_drag(x1, y1, x2, y2)
+                self.auditor.log_event(user_id, "DRAG", f"({x1},{y1})→({x2},{y2})")
+                return res
+
+            elif command_name == "scroll":
+                direction = args[0] if args and args[0] in ("up", "down") else "down"
+                amount = int(args[1]) if len(args) > 1 and args[1].isdigit() else 3
+                res = await self.handler.handle_scroll(direction, amount)
+                self.auditor.log_event(user_id, "SCROLL", f"{direction} x{amount}")
+                return res
+
+            elif command_name in ("clickimage", "clickimg"):
+                if not args:
+                    return "❌ Gunakan: !clickimage <path_gambar> [confidence]"
+                template = args[0]
+                confidence = float(args[1]) if len(args) > 1 else 0.8
+                res = await self.handler.handle_clickimage(template, confidence)
+                self.auditor.log_event(user_id, "CLICKIMAGE", template)
+                return res
+
+            elif command_name in ("waitimage", "waitimg"):
+                if not args:
+                    return "❌ Gunakan: !waitimage <path_gambar> [timeout] [confidence]"
+                template = args[0]
+                timeout = float(args[1]) if len(args) > 1 and args[1].replace(".", "").isdigit() else 10
+                confidence = float(args[2]) if len(args) > 2 else 0.8
+                res = await self.handler.handle_waitimage(template, timeout, confidence)
+                self.auditor.log_event(user_id, "WAITIMAGE", template)
+                return res
+
+            elif command_name == "run":
+                if not args:
+                    return "❌ Gunakan: !shell <command>"
+                cmd = " ".join(args)
+                res = await self.handler.handle_run(cmd)
+                self.auditor.log_event(user_id, "RUN", cmd[:100])
+                return res
+
             elif command_name == "active":
                 res = await self.handler.handle_active_window()
                 self.auditor.log_event(user_id, "ACTIVE_WINDOW", "")
@@ -276,6 +384,11 @@ class CommandRouter:
                 query = " ".join(args) if args else ""
                 res = await self.handler.handle_web_search(query)
                 self.auditor.log_event(user_id, "WEB_SEARCH", query[:50])
+                return res
+
+            elif command_name == "scrape":
+                res = await self.handler.handle_scrape(args)
+                self.auditor.log_event(user_id, "SCRAPE", " ".join(args)[:50])
                 return res
 
             elif command_name == "wifi":
@@ -321,10 +434,6 @@ class CommandRouter:
                 self.auditor.log_event(user_id, "WORKSPACE", " ".join(args)[:50])
                 return result
 
-            elif command_name == "calendar":
-                result = await self.handler.handle_calendar(args)
-                self.auditor.log_event(user_id, "CALENDAR", " ".join(args)[:50])
-                return result
 
             elif command_name == "quicknote":
                 result = await self.handler.handle_quicknote(args)
@@ -572,6 +681,122 @@ class CommandRouter:
                 self.auditor.log_event(user_id, "AI_AGENT", " ".join(args)[:50])
                 return result
 
+            # AI ADVANCED FEATURES
+            elif command_name == "memory":
+                result = await self.handler.handle_memory(args)
+                self.auditor.log_event(user_id, "MEMORY", " ".join(args)[:50])
+                return result
+
+            elif command_name == "mcp":
+                result = await self.handler.handle_mcp(args)
+                self.auditor.log_event(user_id, "MCP", " ".join(args)[:50])
+                return result
+
+            elif command_name == "companion":
+                result = await self.handler.handle_companion(args)
+                self.auditor.log_event(user_id, "COMPANION", " ".join(args)[:50])
+                return result
+
+            elif command_name == "solve":
+                result = await self.handler.handle_solve(args)
+                self.auditor.log_event(user_id, "SOLVE", " ".join(args)[:50])
+                return result
+
+            elif command_name in ("create_feature", "create"):
+                result = await self.handler.handle_create_feature(args)
+                self.auditor.log_event(user_id, "CREATE_FEATURE", " ".join(args)[:50])
+                return result
+
+            elif command_name == "self_evolve":
+                result = await self.handler.handle_self_evolve(args)
+                self.auditor.log_event(user_id, "SELF_EVOLVE", " ".join(args)[:50])
+                return result
+
+            elif command_name == "optimize_me":
+                result = await self.handler.handle_optimize_me(args)
+                self.auditor.log_event(user_id, "OPTIMIZE_ME", " ".join(args)[:50])
+                return result
+
+            elif command_name == "proactive":
+                result = await self.handler.handle_proactive(args)
+                self.auditor.log_event(user_id, "PROACTIVE", " ".join(args)[:50])
+                return result
+
+            elif command_name == "learn":
+                result = await self.handler.handle_learn(args)
+                self.auditor.log_event(user_id, "LEARN", " ".join(args)[:50])
+                return result
+
+            elif command_name == "agent_mode":
+                result = await self.handler.handle_agent_mode(args)
+                self.auditor.log_event(user_id, "AGENT_MODE", " ".join(args)[:50])
+                return result
+
+            elif command_name in ("internet_brain", "otak_internet"):
+                result = await self.handler.handle_internet_brain(args)
+                self.auditor.log_event(user_id, "INTERNET_BRAIN", " ".join(args)[:50])
+                return result
+
+            elif command_name in ("live_web", "web_langsung"):
+                result = await self.handler.handle_live_web(args)
+                self.auditor.log_event(user_id, "LIVE_WEB", " ".join(args)[:50])
+                return result
+
+            elif command_name in ("deep_scrape", "scrape_dalam"):
+                result = await self.handler.handle_deep_scrape(args)
+                self.auditor.log_event(user_id, "DEEP_SCRAPE", " ".join(args)[:50])
+                return result
+
+            elif command_name in ("research", "riset"):
+                result = await self.handler.handle_research(args)
+                self.auditor.log_event(user_id, "RESEARCH", " ".join(args)[:50])
+                return result
+
+            elif command_name in ("verify_fact", "cek_fakta"):
+                result = await self.handler.handle_verify_fact(args)
+                self.auditor.log_event(user_id, "VERIFY_FACT", " ".join(args)[:50])
+                return result
+
+            elif command_name in ("news_digest", "ringkasan_berita"):
+                result = await self.handler.handle_news_digest(args)
+                self.auditor.log_event(user_id, "NEWS_DIGEST", " ".join(args)[:50])
+                return result
+
+            elif command_name in ("trend_hunter", "pemburu_tren"):
+                result = await self.handler.handle_trend_hunter(args)
+                self.auditor.log_event(user_id, "TREND_HUNTER", " ".join(args)[:50])
+                return result
+
+            elif command_name in ("comparator", "pembanding"):
+                result = await self.handler.handle_comparator(args)
+                self.auditor.log_event(user_id, "COMPARATOR", " ".join(args)[:50])
+                return result
+
+            elif command_name in ("qna", "tanya"):
+                result = await self.handler.handle_qna(args)
+                self.auditor.log_event(user_id, "QNA", " ".join(args)[:50])
+                return result
+
+            elif command_name in ("generate_image", "gambar"):
+                result = await self.handler.handle_generate_image(args)
+                self.auditor.log_event(user_id, "GENERATE_IMAGE", " ".join(args)[:50])
+                return result
+
+            elif command_name in ("translate", "terjemah"):
+                result = await self.handler.handle_translate(args)
+                self.auditor.log_event(user_id, "TRANSLATE", " ".join(args)[:50])
+                return result
+
+            elif command_name in ("explain", "jelaskan"):
+                result = await self.handler.handle_explain(args)
+                self.auditor.log_event(user_id, "EXPLAIN", " ".join(args)[:50])
+                return result
+
+            elif command_name in ("proactive_suggest", "saran_otomatis"):
+                result = await self.handler.handle_proactive_suggest(args)
+                self.auditor.log_event(user_id, "PROACTIVE_SUGGEST", " ".join(args)[:50])
+                return result
+
             elif command_name == "help":
                 return HELP_TEXT
 
@@ -584,124 +809,133 @@ class CommandRouter:
             raise
 
 
-HELP_TEXT = """
-🤖 *Remote Laptop Control — Help*
+HELP_TEXT = """🤖 <b>Remote Laptop Control — Help</b>
 
-*1. Media & Deteksi Layar:*
-`!screenshot [grid]` — Screenshot layar (opsi grid koordinat)
-`!video [detik]` — Rekam layar (max 30s)
-`!webcam` — Foto webcam
-`!webcamvid [detik]` — Rekam video webcam
-`!active` — Deteksi jendela aplikasi aktif
+<b>1. Media & Deteksi Layar:</b>
+<code>!screenshot [grid]</code> — Screenshot layar (opsi grid koordinat)
+<code>!video [detik]</code> — Rekam layar (max 30s)
+<code>!webcam</code> — Foto webcam
+<code>!webcamvid [detik]</code> — Rekam video webcam
+<code>!active</code> — Deteksi jendela aplikasi aktif
 
-*2. Simulasi Input:*
-`!click [x] [y]` — Simulasi klik mouse kiri
-`!type [teks]` — Simulasi ketik teks keyboard
-`!press [tombol]` — Simulasi tekan tombol keyboard
+<b>2. Simulasi Input:</b>
+<code>!click [x] [y]</code> — Simulasi klik mouse kiri
+<code>!type [teks]</code> — Simulasi ketik teks keyboard
+<code>!press [tombol]</code> — Simulasi tekan tombol keyboard
 
-*3. Navigasi & File:*
-`!cd [path]` — Pindah direktori kerja (Ingatan persisten)
-`!ls [path]` — List file di folder aktif
-`!find [pattern]` — Cari file secara rekursif
-`!get [filepath]` — Download/kirim file ke HP
-`!read` — Baca clipboard laptop
-`!write [teks]` — Tulis teks ke clipboard laptop
-`!clip sync [start|stop]` — Sinkronisasi otomatis clipboard laptop ke HP
-`!term` — Mode Terminal Interaktif
+<b>3. Navigasi & File:</b>
+<code>!cd [path]</code> — Pindah direktori kerja (Ingatan persisten)
+<code>!ls [path]</code> — List file di folder aktif
+<code>!find [pattern]</code> — Cari file secara rekursif
+<code>!get [filepath]</code> — Download/kirim file ke HP
+<code>!read</code> — Baca clipboard laptop
+<code>!write [teks]</code> — Tulis teks ke clipboard laptop
+<code>!clip sync [start|stop]</code> — Sinkronisasi otomatis clipboard laptop ke HP
+<code>!term</code> — Mode Terminal Interaktif
 
-*4. AI & Otomasi:*
-`!opencode run "<query>"` — Menjalankan AI Coding Agent untuk membuat folder/file/CRUD otomatis
-`!agy "<query>"` — Perintah AI Antigravity CLI untuk tugas sistem tingkat lanjut
-`!testai` — Menguji konektivitas integrasi AI ke API NVIDIA NIM
+<b>4. AI & Otomasi:</b>
+<code>!opencode run "&lt;query&gt;"</code> — Menjalankan AI Coding Agent untuk membuat folder/file/CRUD otomatis
+<code>!agy "&lt;query&gt;"</code> — Perintah AI Antigravity CLI untuk tugas sistem tingkat lanjut
+<code>!testai</code> — Menguji konektivitas integrasi AI ke API NVIDIA NIM
 
-*5. Sistem & Kontrol:*
-`!sysinfo` — Info CPU, RAM, Disk, Baterai
-`!battery` — Status detail dan kesehatan baterai laptop
-`!brightness [0-100]` — Mengatur/membaca kecerahan layar laptop
-`!media [play|pause|next|prev]` — Mengontrol pemutar musik/video aktif
-`!notif [teks]` — Memunculkan popup desktop notification di layar laptop
-`!tts [teks]` — Membunyikan suara Text-to-Speech di laptop
-`!ping [host]` — Cek latensi laptop ke host (default: 8.8.8.8)
-`!speedtest` — Uji kecepatan internet laptop
-`!win [minimize|close]` — Minimalkan atau tutup jendela aplikasi aktif
-`!web [query]` — Pencarian web Google/DuckDuckGo
-`!wifi` — Memindai jaringan Wi-Fi sekitar
-`!ports` — Menampilkan daftar port listening aktif
-`!process [list|kill <pid/nama>]` — Melihat daftar proses atau menutup paksa aplikasi
-`!launch [nama_aplikasi]` — Meluncurkan aplikasi desktop secara remote (misal: chrome, vscode, spotify)
-`!apps [query]` — Menampilkan atau mencari daftar aplikasi GUI/desktop terinstall
-`!todo [add/done/delete/clear] [tugas | tenggat | speak]` — Mengelola daftar tugas (opsi `speak` untuk bersuara di laptop)
-`!guard [on|off]` — Aktifkan mode pengawasan gerakan laptop lewat webcam
-`!lock` — Kunci layar laptop
-`!unlock` — Buka kunci layar laptop
-`!reboot` — Restart laptop (butuh konfirmasi)
-`!run [script]` — Jalankan script secara aman
-`!listen [detik]` — Rekam suara sekitar (max 30s)
-`!logout` — Keluar sesi aktif
-`!help` — Tampilkan bantuan ini
+<b>5. Sistem & Kontrol:</b>
+<code>!sysinfo</code> — Info CPU, RAM, Disk, Baterai
+<code>!battery</code> — Status detail dan kesehatan baterai laptop
+<code>!brightness [0-100]</code> — Mengatur/membaca kecerahan layar laptop
+<code>!media [play|pause|next|prev]</code> — Mengontrol pemutar musik/video aktif
+<code>!notif [teks]</code> — Memunculkan popup desktop notification di layar laptop
+<code>!tts [teks]</code> — Membunyikan suara Text-to-Speech di laptop
+<code>!ping [host]</code> — Cek latensi laptop ke host (default: 8.8.8.8)
+<code>!speedtest</code> — Uji kecepatan internet laptop
+<code>!win [minimize|close]</code> — Minimalkan atau tutup jendela aplikasi aktif
+<code>!web [query]</code> — Pencarian web Google/DuckDuckGo
+<code>!wifi</code> — Memindai jaringan Wi-Fi sekitar
+<code>!ports</code> — Menampilkan daftar port listening aktif
+<code>!process [list|kill &lt;pid/nama&gt;]</code> — Melihat daftar proses atau menutup paksa aplikasi
+<code>!launch [nama_aplikasi]</code> — Meluncurkan aplikasi desktop secara remote (misal: chrome, vscode, spotify)
+<code>!apps [query]</code> — Menampilkan atau mencari daftar aplikasi GUI/desktop terinstall
+<code>!todo [add/done/delete/clear] [tugas | tenggat | speak]</code> — Mengelola daftar tugas (opsi <code>speak</code> untuk bersuara di laptop)
+<code>!guard [on|off]</code> — Aktifkan mode pengawasan gerakan laptop lewat webcam
+<code>!lock</code> — Kunci layar laptop
+<code>!unlock</code> — Buka kunci layar laptop
+<code>!reboot</code> — Restart laptop (butuh konfirmasi)
+<code>!run [script]</code> — Jalankan script secara aman
+<code>!listen [detik]</code> — Rekam suara sekitar (max 30s)
+<code>!logout</code> — Keluar sesi aktif
+<code>!help</code> — Tampilkan bantuan ini
 
-*6. Produktivitas (Fitur Baru):*
-`!focus [on|off] [menit]` — Mode fokus dengan Pomodoro timer + blokir situs
-`!workspace [save|load|list|delete] [nama]` — Simpan/muat seluruh sesi kerja
-`!calendar [today|next|list|join]` — Integrasi Google Calendar
-`!quicknote [judul] [isi]` — Catatan markdown cepat
-`!browser [new|search|scroll|refresh|close] [args]` — Kontrol browser dari HP
-`!daily [yesterday]` — Laporan aktivitas laptop 24 jam
-`!reminder [add|list|delete] [teks] [waktu]` — Pengingat dengan notifikasi
-`!task [add|list|done|delete] [tugas]` — Manajemen tugas terpusat
-`!meeting mode [on|off] [nama]` — Persiapan meeting otomatis
-`!custom alias [nama] [perintah]` — Buat alias perintah custom sendiri
+<b>6. Produktivitas:</b>
+<code>!focus [on|off] [menit]</code> — Mode fokus dengan Pomodoro timer + blokir situs
+<code>!workspace [save|load|list|delete] [nama]</code> — Simpan/muat seluruh sesi kerja
+<code>!quicknote [judul] [isi]</code> — Catatan markdown cepat
+<code>!browser [new|search|scroll|refresh|close] [args]</code> — Kontrol browser dari HP
+<code>!daily [yesterday]</code> — Laporan aktivitas laptop 24 jam
+<code>!reminder [add|list|delete] [teks] [waktu]</code> — Pengingat dengan notifikasi
+<code>!task [add|list|done|delete] [tugas]</code> — Manajemen tugas terpusat
+<code>!meeting mode [on|off] [nama]</code> — Persiapan meeting otomatis
+<code>!custom alias [nama] [perintah]</code> — Buat alias perintah custom sendiri
 
-*7. AI & Automation (Fitur Phase 2):*
-`!ai work [perintah]` — AI assistant produktivitas
-`!ai write [tipe] [topik]` — Buat draft dokumen/email via AI
-`!ai automate [deskripsi]` — Buat automation script via AI
-`!ai summarize [target]` — Ringkasan file/folder via AI
-`!ai research [topik] [depth]` — Riset topik via AI, simpan ke folder Research
-`!ai insight [daily|weekly|monthly]` — Analisis pola penggunaan laptop
-`!smart clipboard [on|off|history]` — Smart clipboard dengan deteksi tipe data
-`!macro [record|play|save|list|delete] [nama]` — Rekam/putar aksi keyboard mouse
-`!schedule add <perintah> <waktu>` — Jadwalkan perintah otomatis
-`!voice cmd [on|off]` — Aktifkan voice command dari HP
+<b>7. AI & Automation (Beta):</b>
+<code>!ai work [perintah]</code> — AI assistant produktivitas
+<code>!ai write [tipe] [topik]</code> — Buat draft dokumen/email via AI
+<code>!ai automate [deskripsi]</code> — Buat automation script via AI
+<code>!ai summarize [target]</code> — Ringkasan file/folder via AI
+<code>!ai research [topik] [depth]</code> — Riset topik via AI, simpan ke folder Research
+<code>!ai insight [daily|weekly|monthly]</code> — Analisis pola penggunaan laptop
+<code>!smart_clip [on|off|history]</code> — Smart clipboard dengan deteksi tipe data
+<code>!macro [record|play|save|list|delete] [nama]</code> — Rekam/putar aksi keyboard mouse
+<code>!schedule add &lt;perintah&gt; &lt;waktu&gt;</code> — Jadwalkan perintah otomatis
+<code>!voice_cmd [on|off]</code> — Aktifkan voice command dari HP
 
-*8. File, Sync & Data Management (Fitur Phase 3):*
-`!sync <folder> [service]` — Sinkronisasi folder ke cloud (local/gdrive)
-`!quick upload` — Lihat folder upload untuk kirim file dari HP
-`!recent [files|folders] [jumlah]` — Daftar file/folder terbaru
-`!search content <keyword> [folder]` — Cari teks di dalam file
-`!convert <file> <format>` — Konversi format file (pandoc/ffmpeg)
-`!backup <folder> [quick|full]` — Backup folder ke penyimpanan aman
-`!organize <folder> [by type|date]` — Organisir file otomatis ke subfolder
-`!file watcher [on|off|status] <folder>` — Pantau perubahan folder realtime
-`!version [commit|history|revert|status] <file>` — Versioning file lokal
-`!clean [temp|cache|duplicates|all]` — Bersihkan sampah disk
+<b>8. File, Sync & Data Management (Beta):</b>
+<code>!sync &lt;folder&gt; [service]</code> — Sinkronisasi folder ke cloud (local/gdrive)
+<code>!quick_upload</code> — Lihat folder upload untuk kirim file dari HP
+<code>!recent [files|folders] [jumlah]</code> — Daftar file/folder terbaru
+<code>!search_content &lt;keyword&gt; [folder]</code> — Cari teks di dalam file
+<code>!convert &lt;file&gt; &lt;format&gt;</code> — Konversi format file (pandoc/ffmpeg)
+<code>!backup &lt;folder&gt; [quick|full]</code> — Backup folder ke penyimpanan aman
+<code>!organize &lt;folder&gt; [by type|date]</code> — Organisir file otomatis ke subfolder
+<code>!file_watcher [on|off|status] &lt;folder&gt;</code> — Pantau perubahan folder realtime
+<code>!version [commit|history|revert|status] &lt;file&gt;</code> — Versioning file lokal
+<code>!clean [temp|cache|duplicates|all]</code> — Bersihkan sampah disk
 
-*9. System Enhancement (Fitur Phase 4):*
-`!volume [app|global] [level|up|down|mute]` — Kontrol volume global/per-app
-`!power [performance|balanced|saver]` — Ganti profil daya laptop
-`!multi monitor [list|switch|arrange] [args]` — Kelola monitor ganda
-`!sleep [delay]` — Tidurkan laptop (contoh: !sleep 5m)
-`!wake <waktu>` — Jadwalkan bangunkan laptop (contoh: !wake 07:30)
-`!quick app <nama>` — Buka aplikasi cepat (alias !launch)
-`!battery health` — Cek kesehatan baterai detail
-`!night mode [on|off]` — Dark mode + blue light filter
-`!window [arrange|snap|minimize all|close all]` — Atur semua jendela
-`!hotkey [create|list|delete] <nama> <key>` — Buat hotkey global
-`!launch advanced <app> [args]` — Luncurkan aplikasi dengan parameter
+<b>9. System Enhancement (Beta):</b>
+<code>!volume [app|global] [level|up|down|mute]</code> — Kontrol volume global/per-app
+<code>!power [performance|balanced|saver]</code> — Ganti profil daya laptop
+<code>!multi_monitor [list|switch|arrange] [args]</code> — Kelola monitor ganda
+<code>!sleep [delay]</code> — Tidurkan laptop (contoh: !sleep 5m)
+<code>!wake &lt;waktu&gt;</code> — Jadwalkan bangunkan laptop (contoh: !wake 07:30)
+<code>!quick_app &lt;nama&gt;</code> — Buka aplikasi cepat (alias !launch)
+<code>!night_mode [on|off]</code> — Dark mode + blue light filter
+<code>!window [arrange|snap|minimize all|close all]</code> — Atur semua jendela
+<code>!hotkey [create|list|delete] &lt;nama&gt; &lt;key&gt;</code> — Buat hotkey global
+<code>!launch_advanced &lt;app&gt; [args]</code> — Luncurkan aplikasi dengan parameter
 
-*10. Advanced & Pro (Fitur Phase 5):*
-`!time track [start|stop|status|report] [project]` — Lacak waktu kerja
-`!session [save|list|restore|delete] <name>` — Simpan/pulihkan session aplikasi
-`!share screen [fullscreen|area]` — Screenshot layar
-`!multi device [register|list|delete|send] <name> [ip/command]` — Kelola multi-perangkat
-`!profile [create|list|apply|delete] <name>` — Profile pengguna (apps, power, tema)
-`!dash` — Tampilkan dashboard sistem
-`!activity log [days] [--filter=aksi]` — Lihat log aktivitas
-`!vpn [status|connect|disconnect] [name]` — Kontrol VPN
-`!tunnel [create|list|start|delete] <name> <remote> <port>` — Tunnel SSH
-`!ai agent <task>` — AI Agent untuk tugas kompleks
+<b>10. Advanced & Pro (Beta):</b>
+<code>!time_track [start|stop|status|report] [project]</code> — Lacak waktu kerja
+<code>!session [save|list|restore|delete] &lt;name&gt;</code> — Simpan/pulihkan session aplikasi
+<code>!share_screen [fullscreen|area]</code> — Screenshot layar
+<code>!multi_device [register|list|delete|send] &lt;name&gt; [ip/command]</code> — Kelola multi-perangkat
+<code>!profile [create|list|apply|delete] &lt;name&gt;</code> — Profile pengguna (apps, power, tema)
+<code>!dash</code> — Tampilkan dashboard sistem
+<code>!activity_log [days] [--filter=aksi]</code> — Lihat log aktivitas
+<code>!vpn [status|connect|disconnect] [name]</code> — Kontrol VPN
+<code>!tunnel [create|list|start|delete] &lt;name&gt; &lt;remote&gt; &lt;port&gt;</code> — Tunnel SSH
+<code>!ai_agent &lt;task&gt;</code> — AI Agent untuk tugas kompleks
 
-*Mode AI (jika aktif):*
+<b>11. AI Advanced Intelligence (NEW):</b>
+<code>!memory [search|summarize|forget|stats|sync]</code> — Long-term memory RAG system
+<code>!mcp [on|off|status|query]</code> — Memory Context Provider (monitoring realtime)
+<code>!companion &lt;pesan&gt;</code> — Personal AI companion dengan emotional intelligence
+<code>!solve &lt;problem&gt;</code> — Advanced problem solver dengan web access
+<code>!create feature &lt;deskripsi&gt;</code> — Self-feature generation via AI
+<code>!learn &lt;topik&gt;</code> — Continuous knowledge enrichment
+<code>!self evolve</code> — Daily self-introspection & auto evolution
+<code>!optimize me</code> — Personalized usage optimization advisor
+<code>!proactive [on|off|status]</code> — Proactive & reactive awareness alerts
+<code>!agent &lt;goal&gt;</code> — Advanced autonomous agent mode
+
+<b>Mode AI (jika aktif):</b>
 Ketik perintah natural language langsung untuk diterjemahkan oleh AI. Contoh:
 - "Ambil screenshot layar sekarang"
 - "Tampilkan info sistem"

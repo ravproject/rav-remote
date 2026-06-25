@@ -19,7 +19,7 @@ NIM_BASE_URL = os.environ.get(
     "NVIDIA_NIM_BASE_URL",
     "https://integrate.api.nvidia.com/v1"
 )
-NIM_MODEL = os.environ.get("NVIDIA_NIM_MODEL", "meta/llama-3.1-70b-instruct")
+NIM_MODEL = os.environ.get("NVIDIA_NIM_MODEL", "meta/llama-3.1-8b-instruct")
 AI_ENABLED = os.environ.get("AI_MODE_ENABLED", "true").lower() == "true"
 
 # Timeout untuk API call (LLM might be slow)

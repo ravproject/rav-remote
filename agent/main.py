@@ -76,12 +76,53 @@ def check_system_dependencies():
 async def lifespan(app: FastAPI):
     logger.info("🚀 Laptop Agent starting...")
     check_system_dependencies()
+
+    # Warm up VisionAI model in background
+    try:
+        from ai_module.vision_ai import vision_ai
+        if vision_ai.enabled:
+            asyncio.create_task(vision_ai._warmup())
+    except Exception:
+        pass
+
+    # Warmup memory system in background
+    try:
+        from agent.memory.manager import memory_manager
+        asyncio.create_task(_warmup_memory())
+    except Exception as e:
+        logger.warning(f"Memory system init: {e}")
+
+    # Start MCP Collector if was active
+    try:
+        from agent.memory.mcp_collector import mcp_collector
+        asyncio.create_task(mcp_collector.start())
+    except Exception:
+        pass
+
+    # Start Proactive Engine if was active
+    try:
+        from agent.proactive import proactive_engine
+        asyncio.create_task(proactive_engine.start())
+    except Exception:
+        pass
+
     from agent.command_handler import clipboard_sync_loop
     sync_task = asyncio.create_task(clipboard_sync_loop())
+
+    from agent.scheduler import scheduler
+    async def run_scheduled(cmd: str):
+        return await router.route(cmd, "scheduler")
+    sched_task = asyncio.create_task(scheduler.check_loop(run_scheduled))
+
     yield
     sync_task.cancel()
+    sched_task.cancel()
     try:
         await sync_task
+    except asyncio.CancelledError:
+        pass
+    try:
+        await sched_task
     except asyncio.CancelledError:
         pass
     logger.info("Laptop Agent shutdown")
@@ -114,11 +155,56 @@ async def heartbeat(_=Depends(verify_api_key)):
     g_alerts = list(guard_alerts)
     guard_alerts.clear()
     
+    from agent.focus import focus_manager
+    f_alerts = focus_manager.get_pending_alerts()
+    
+    from agent.reminder import reminder_alerts, check_reminders
+    check_reminders()
+    r_alerts = list(reminder_alerts)
+    reminder_alerts.clear()
+
+    from agent.scheduler import scheduled_alerts
+    s_alerts = list(scheduled_alerts)
+    scheduled_alerts.clear()
+
+    from agent.proactive import proactive_alerts
+    p_alerts = list(proactive_alerts)
+    proactive_alerts.clear()
+    
     return {
         "status": "ONLINE",
         "metrics": metrics,
-        "alerts": anomalies + battery + clip_alerts + g_alerts
+        "alerts": anomalies + battery + clip_alerts + g_alerts + f_alerts + r_alerts + s_alerts + p_alerts
     }
+
+
+@app.get("/system/scheduled-files")
+async def get_scheduled_files(_=Depends(verify_api_key)):
+    from agent.scheduler import scheduled_files
+    files = list(scheduled_files)
+    scheduled_files.clear()
+    result = []
+    for f in files:
+        entry = {k: v for k, v in f.items() if k != "data"}
+        entry["data"] = base64.b64encode(f["data"]).decode()
+        result.append(entry)
+    return {"files": result}
+
+
+@app.get("/system/voice-cmd-status")
+async def get_voice_cmd_status(_=Depends(verify_api_key)):
+    from agent.voice_cmd import voice_cmd_manager
+    return {"active": voice_cmd_manager.active}
+
+
+@app.get("/system/file-watcher-changes")
+async def get_file_watcher_changes(folder: str = None, _=Depends(verify_api_key)):
+    from agent.file_watcher import file_watcher
+    changes = file_watcher.get_pending_notifications(folder)
+    for c in changes:
+        file_watcher.acknowledge_notifications(c["folder"], len(c["changes"]))
+    return {"changes": changes}
+
 
 @app.get("/system/alerts")
 async def get_alerts(_=Depends(verify_api_key)):
@@ -135,7 +221,12 @@ async def get_alerts(_=Depends(verify_api_key)):
     g_alerts = list(guard_alerts)
     guard_alerts.clear()
     
-    return {"alerts": anomalies + battery + clip_alerts + g_alerts}
+    from agent.reminder import reminder_alerts, check_reminders
+    check_reminders()
+    r_alerts = list(reminder_alerts)
+    reminder_alerts.clear()
+    
+    return {"alerts": anomalies + battery + clip_alerts + g_alerts + r_alerts}
 
 
 @app.post("/auth/verify-otp")
@@ -214,8 +305,20 @@ async def execute_command(
     if not verified_user or verified_user != request.user_id:
         raise HTTPException(status_code=401, detail="Invalid session")
 
+    # Resolve custom alias before sanitization
+    resolved = request.command
+    if resolved.startswith("!"):
+        try:
+            from agent.custom_aliases import alias_manager
+            alias_name = resolved.split()[0][1:].lower()
+            alias_cmd = alias_manager.get(alias_name)
+            if alias_cmd:
+                resolved = alias_cmd
+        except Exception:
+            pass
+
     # Sanitasi input
-    clean_input = sanitizer.sanitize_command(request.command)
+    clean_input = sanitizer.sanitize_command(resolved)
     if not clean_input:
         auditor.log_security_alert(request.user_id, "INJECTION_ATTEMPT", request.command)
         raise HTTPException(status_code=400, detail="Input tidak valid atau berbahaya")
@@ -227,7 +330,10 @@ async def execute_command(
     elif isinstance(result, dict):
         res_type = result.get("type")
         if res_type == "photo":
-            return {"type": "image", "content": base64.b64encode(result["data"]).decode()}
+            resp = {"type": "image", "content": base64.b64encode(result["data"]).decode()}
+            if "caption" in result:
+                resp["caption"] = result["caption"]
+            return resp
         elif res_type == "video":
             return {"type": "video", "content": {
                 "data": base64.b64encode(result["data"]).decode(),
@@ -258,6 +364,14 @@ async def execute_command(
              final_text = sys_monitor.get_system_summary()
         return {"type": "text", "content": final_text}
 
+
+async def _warmup_memory():
+    try:
+        from agent.memory.manager import memory_manager
+        memory_manager.ensure_loaded()
+        logger.info("✅ Memory system ready (384-d embeddings via ChromaDB ONNX)")
+    except Exception as e:
+        logger.warning(f"Memory warmup: {e}")
 
 if __name__ == "__main__":
     import uvicorn

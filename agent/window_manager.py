@@ -6,32 +6,50 @@ import shutil
 from loguru import logger
 
 def arrange_windows(layout: str = "cascade") -> str:
-    if not shutil.which("wmctrl") and not shutil.which("xdotool"):
-        return "wmctrl atau xdotool diperlukan."
+    has_wmctrl = shutil.which("wmctrl")
+    has_xdotool = shutil.which("xdotool")
+    if not has_wmctrl and not has_xdotool:
+        return "wmctrl atau xdotool diperlukan. Install: sudo apt install wmctrl"
     try:
-        res = subprocess.run(["wmctrl", "-l"], capture_output=True, text=True, timeout=5)
-        windows = [line for line in res.stdout.strip().split("\n") if line]
+        if has_wmctrl:
+            res = subprocess.run(["wmctrl", "-l"], capture_output=True, text=True, timeout=5)
+            raw = res.stdout.strip()
+            windows = [line for line in raw.split("\n") if line]
+        else:
+            res = subprocess.run(["xdotool", "search", "--name", ""], capture_output=True, text=True, timeout=5)
+            raw = res.stdout.strip()
+            windows = [f"{wid} _ " for wid in raw.split("\n") if wid.strip()]
         if len(windows) < 2:
             return "Hanya 1 jendela terbuka."
+        screen_w, screen_h = 1920, 1080
         if layout == "cascade":
             x, y = 0, 0
             for w in windows:
                 wid = w.split()[0]
-                subprocess.run(["wmctrl", "-i", "-r", wid, "-e", f"0,{x},{y},800,600"],
-                               capture_output=True, timeout=3)
+                if has_wmctrl:
+                    subprocess.run(["wmctrl", "-i", "-r", wid, "-e", f"0,{x},{y},800,600"],
+                                   capture_output=True, timeout=3)
+                else:
+                    subprocess.run(["xdotool", "windowmove", wid, str(x), str(y)], capture_output=True, timeout=5)
+                    subprocess.run(["xdotool", "windowsize", wid, "800", "600"], capture_output=True, timeout=5)
                 x += 30
                 y += 30
             return f"Jendela di-cascade ({len(windows)} window)."
         elif layout == "tile":
             import math
             cols = math.ceil(math.sqrt(len(windows)))
-            w_w, w_h = 1920 // cols, 1080 // math.ceil(len(windows) / cols)
+            w_w = screen_w // cols
+            w_h = screen_h // math.ceil(len(windows) / cols)
             for i, w in enumerate(windows):
                 wid = w.split()[0]
                 x = (i % cols) * w_w
                 y = (i // cols) * w_h
-                subprocess.run(["wmctrl", "-i", "-r", wid, "-e", f"0,{x},{y},{w_w},{w_h}"],
-                               capture_output=True, timeout=3)
+                if has_wmctrl:
+                    subprocess.run(["wmctrl", "-i", "-r", wid, "-e", f"0,{x},{y},{w_w},{w_h}"],
+                                   capture_output=True, timeout=3)
+                else:
+                    subprocess.run(["xdotool", "windowmove", wid, str(x), str(y)], capture_output=True, timeout=5)
+                    subprocess.run(["xdotool", "windowsize", wid, str(w_w), str(w_h)], capture_output=True, timeout=5)
             return f"Jendela di-tile ({len(windows)} window)."
         return f"Layout tidak dikenal: {layout}"
     except Exception as e:
@@ -46,7 +64,7 @@ def snap_window(position: str = "left") -> str:
     if not key:
         return "Posisi tidak dikenal. Gunakan: left, right, top, bottom"
     try:
-        subprocess.run(["xdotool", "key", key], capture_output=True, timeout=3)
+        subprocess.run(["xdotool", "key", key], capture_output=True, timeout=5)
         return f"Jendela di-snap ke {position}."
     except Exception as e:
         return f"Gagal snap: {e}"
@@ -54,7 +72,7 @@ def snap_window(position: str = "left") -> str:
 def minimize_all() -> str:
     if shutil.which("xdotool"):
         try:
-            subprocess.run(["xdotool", "key", "super+d"], capture_output=True, timeout=3)
+            subprocess.run(["xdotool", "key", "super+d"], capture_output=True, timeout=5)
             return "Semua jendela diminimalkan."
         except Exception:
             pass

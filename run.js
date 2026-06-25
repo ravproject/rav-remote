@@ -17,7 +17,20 @@ function logSystemError(msg) {
   console.error(`\x1b[31m[System Error]\x1b[0m ${msg}`);
 }
 
+async function quickDepCheck() {
+  const scriptsDir = path.join(__dirname, 'scripts');
+  const checkScript = path.join(scriptsDir, 'check_deps.js');
+  if (!fs.existsSync(checkScript)) return;
+  try {
+    require('child_process').execSync(`node "${checkScript}"`, { stdio: 'inherit', timeout: 120000 });
+  } catch {
+    logSystemError('Beberapa dependency bermasalah. Jalankan "npm run check-deps" untuk detail.');
+  }
+}
+
 async function main() {
+  await quickDepCheck();
+
   if (!fs.existsSync(envPath)) {
     logSystem("File .env tidak ditemukan. Memulai setup interaktif...");
     const setupScript = path.join(__dirname, 'setup.js');
