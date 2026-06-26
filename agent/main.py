@@ -21,6 +21,7 @@ from .file_manager import save_file
 from .battery_monitor import battery_monitor
 from .system_monitor import sys_monitor
 from security.watchdog import watchdog
+from agent.fleet import FleetRegisterRequest, validate_fleet_key, register_agent_to_registry
 
 AGENT_API_KEY = os.environ["AGENT_API_KEY"]
 api_key_header = APIKeyHeader(name="X-API-Key")
@@ -114,6 +115,10 @@ async def lifespan(app: FastAPI):
         return await router.route(cmd, "scheduler")
     sched_task = asyncio.create_task(scheduler.check_loop(run_scheduled))
 
+    if os.environ.get("RAV_MODE", "hub") == "agent":
+        from agent.fleet import register_with_hub_loop
+        asyncio.create_task(register_with_hub_loop())
+
     yield
     sync_task.cancel()
     sched_task.cancel()
@@ -138,6 +143,21 @@ async def verify_api_key(x_api_key: str = Header(...)):
     if x_api_key != AGENT_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid API key")
     return x_api_key
+
+
+@app.post("/fleet/register")
+async def fleet_register(request: FleetRegisterRequest):
+    """Endpoint pairing — agent satellite mendaftar otomatis ke hub."""
+    if os.environ.get("RAV_MODE", "hub") != "hub":
+        raise HTTPException(status_code=403, detail="Fleet registration hanya tersedia di mode hub")
+
+    if not validate_fleet_key(request.fleet_key):
+        raise HTTPException(status_code=403, detail="Kode pairing fleet tidak valid")
+
+    register_agent_to_registry(request.agent_id, request.host, request.port, request.api_key)
+    logger.info(f"Fleet registered: {request.agent_id} -> {request.host}:{request.port}")
+    return {"status": "ok", "agent_id": request.agent_id}
+
 
 @app.get("/system/heartbeat")
 async def heartbeat(_=Depends(verify_api_key)):
@@ -373,13 +393,23 @@ async def _warmup_memory():
     except Exception as e:
         logger.warning(f"Memory warmup: {e}")
 
+def _resolve_bind_host() -> str:
+    if os.environ.get("AGENT_BIND_HOST"):
+        return os.environ["AGENT_BIND_HOST"]
+    # Setup fleet (RAV_MODE) default ke 0.0.0.0 agar multi-komputer LAN/Tailscale jalan
+    if os.environ.get("RAV_MODE"):
+        return "0.0.0.0"
+    return "127.0.0.1"
+
+
 if __name__ == "__main__":
     import uvicorn
     from pathlib import Path
+    bind_host = _resolve_bind_host()
     try:
         uvicorn.run(
             app,
-            host="127.0.0.1",  # HANYA localhost — jangan 0.0.0.0
+            host=bind_host,
             port=int(os.environ.get("AGENT_PORT", "8765")),
             ssl_keyfile=os.environ.get("SSL_KEYFILE"),
             ssl_certfile=os.environ.get("SSL_CERTFILE"),

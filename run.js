@@ -144,7 +144,15 @@ function startApp() {
   // Start Agent
   startProcess('Agent', pythonPath, ['-m', 'agent.main'], '\x1b[36m');
 
-  // Start Telegram Bot if token is configured
+  const ravMode = (process.env.RAV_MODE || 'hub').toLowerCase();
+
+  if (ravMode === 'agent') {
+    logSystem(`Mode Agent — hub: ${process.env.HUB_URL || '(belum dikonfigurasi)'}`);
+    logSystem('Agent akan mendaftar otomatis ke hub saat startup.');
+    return;
+  }
+
+  // Start Telegram Bot if token is configured (hub mode)
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   if (botToken && botToken !== 'your_telegram_bot_token_here' && botToken.trim() !== '') {
     startProcess('Telegram Bot', pythonPath, ['-m', 'bot.telegram_bot'], '\x1b[35m');

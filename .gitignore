@@ -12,6 +12,7 @@ npm-debug.log
 
 # Kredensial dan Rahasia (SANGAT PENTING)
 .env
+.fleet-pairing-code
 
 # Folder Log dan Sesi
 logs/

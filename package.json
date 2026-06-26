@@ -16,6 +16,8 @@
   "scripts": {
     "start": "node run.js",
     "setup": "node setup.js",
+    "setup:hub": "node setup.js --hub",
+    "setup:agent": "node setup.js --agent",
     "whatsapp": "node run.js --whatsapp",
     "dev": "nodemon -e js,json,py,yaml,env run.js",
     "check-deps": "node scripts/check_deps.js",
